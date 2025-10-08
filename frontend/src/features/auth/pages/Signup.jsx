@@ -15,7 +15,7 @@ export default function Signup() {
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <AuthCard title="Create Account">
+      <AuthCard title="PeerPrep">
          <h1 className="mb-5 flex items-center justify-center text-4xl font-bold text-[#262D6C]">Create Account</h1>
         <p className="text-center text-[#999999] mb-4">
           Already have an account?{" "}
