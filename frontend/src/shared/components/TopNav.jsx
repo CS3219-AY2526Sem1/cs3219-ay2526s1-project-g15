@@ -4,7 +4,7 @@ import Notification from "../assets/NotificationBell.png";
 import ProfilePic from "../assets/ProfilePic.png";
 
 const linkCls = ({ isActive }) =>
-  `px-3 py-2 rounded-md text-xl font-medium ${isActive ? "text-[#68659A]" : "text-[#999999] hover:text-gray-900"}`;
+  `px-3 py-2 rounded-md text-xl font-medium ${isActive ? "text-[#68659A] font-bold" : "text-[#999999] hover:text-gray-900"}`;
 
 export default function TopNav() {
   return (

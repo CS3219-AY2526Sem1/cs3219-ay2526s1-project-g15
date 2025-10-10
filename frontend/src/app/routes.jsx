@@ -5,6 +5,7 @@ import Signup from "../features/auth/pages/Signup";
 import Verification from "../features/auth/pages/forgotPassword/Verification";
 import ForgotPassword from "../features/auth/pages/forgotPassword/ForgotPassword";
 import Home from "../features/home/pages/Home";
+import Sessions from "../features/session/pages/Sessions";
 import Room from "../features/session/pages/Room";
 
 export default function RoutesDef() {
@@ -16,6 +17,7 @@ export default function RoutesDef() {
       <Route path="/forgotpassword-verification" element={<Verification/>}/>
       <Route path="/forgotpassword" element={<ForgotPassword/>}/>
       <Route path="/home" element={<Home />} />
+      <Route path="/sessions" element={<Sessions />} />
       <Route path="/session/active" element={<Room />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
