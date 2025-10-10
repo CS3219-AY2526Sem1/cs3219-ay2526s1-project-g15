@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../components/OngoingMeetingCard";
 import DifficultyPicker from "../components/DifficultyPicker";
@@ -9,6 +10,7 @@ export default function Home() {
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [difficulty, setDifficulty] = useState("Medium");
   const [topic, setTopic] = useState("Arrays");
+  const navigate = useNavigate();
 
   const rejoinMeeting = () => {
     alert("Rejoining your ongoing meeting…");
@@ -65,8 +67,14 @@ export default function Home() {
     };
   }, []);
 
-  // TODO: confirm match logic: navigate user to the meeting room
-  const confirmMatch = () => alert("Confirmed!\nNavigating to room…");
+  // TODO: confirm match logic: navigate user to the correct meeting room
+  const confirmMatch = () => {
+    // stop timers 
+    clearTimeout(timeoutRef?.current);
+    clearInterval(pollRef?.current);
+    navigate("/session/active"); 
+  };
+  
   const retry = () => startSearch();
 
   return (
