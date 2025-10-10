@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, DateTime, func
+from sqlalchemy import String, DateTime, func, Integer
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -14,9 +14,20 @@ class User(Base):
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    password_resets: Mapped[list["PasswordReset"]] = relationship(
+        "PasswordReset", 
+        back_populates="user", 
+        cascade="all,delete-orphan",
+    )
+
+    from app.models.password_reset import PasswordReset

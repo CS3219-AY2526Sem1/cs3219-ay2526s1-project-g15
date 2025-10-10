@@ -13,3 +13,11 @@ class AuthOut(BaseModel):
     access_token: str
     refresh_token: str
     refresh_token_id: str
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+class ResetPasswordIn(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=12)
+    new_password: str = Field(min_length=8)

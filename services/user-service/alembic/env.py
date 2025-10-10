@@ -8,6 +8,11 @@ from alembic import context
 from app.core.config import settings
 from app.models.user import Base as UserBase
 from app.models.refresh_token import Base as RTBase
+from app.models.password_reset import Base as PRBase
+
+import app.models.user
+import app.models.refresh_token
+import app.models.password_reset
 
 # Combine metadata
 target_metadata = UserBase.metadata
