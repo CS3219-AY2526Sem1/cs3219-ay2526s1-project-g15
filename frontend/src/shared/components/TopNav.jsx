@@ -2,6 +2,7 @@ import { Link, NavLink } from "react-router-dom";
 import Logo from "../assets/Logo.png";
 import Notification from "../assets/NotificationBell.png";
 import ProfilePic from "../assets/ProfilePic.png";
+import ProfileMenu from "./ProfileMenu";
 
 const linkCls = ({ isActive }) =>
   `px-3 py-2 rounded-md text-xl font-medium ${isActive ? "text-[#68659A] font-bold" : "text-[#999999] hover:text-gray-900"}`;
@@ -24,9 +25,9 @@ export default function TopNav() {
         </nav>
 
         <div className="flex items-center gap-3 text-gray-600">
-        {/* TODO: link to notification and profile portion */}
+        {/* TODO: link to notification */}
           <img src={Notification} alt="Notification bell"  className="h-[30px] w-[30px] object-contain select-none pointer-events-none"/>
-          <img src={ProfilePic} alt="Profile picture"  className="h-[30px] w-[30px] object-contain select-none pointer-events-none"/>
+          <ProfileMenu avatarSrc={ProfilePic} />
         </div>
       </div>
     </header>

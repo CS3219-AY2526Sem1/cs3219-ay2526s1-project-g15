@@ -7,6 +7,7 @@ import ForgotPassword from "../features/auth/pages/forgotPassword/ForgotPassword
 import Home from "../features/home/pages/Home";
 import Sessions from "../features/session/pages/Sessions";
 import Room from "../features/session/pages/Room";
+import EditProfile from "../features/profile/pages/EditProfile";
 
 export default function RoutesDef() {
   return (
@@ -19,6 +20,7 @@ export default function RoutesDef() {
       <Route path="/home" element={<Home />} />
       <Route path="/sessions" element={<Sessions />} />
       <Route path="/session/active" element={<Room />} />
+      <Route path="/profile/edit" element={<EditProfile />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
