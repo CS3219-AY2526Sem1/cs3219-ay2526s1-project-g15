@@ -87,7 +87,7 @@ async def login(payload: LoginIn, request: Request, db: AsyncSession = Depends(g
         hashed="n/a",
         user_agent=request.headers.get("user-agent"),
         ip=request.client.host if request.client else None,
-        expires_at=now + timedelta(seconds=settings.JWT_REFRESH_TTL_SECONDS),
+        expires_at=now + timedelta(seconds=settings.REFRESH_TTL_DAYS * 24 * 60 * 60),
     )
     db.add(rt)
     await db.commit()
