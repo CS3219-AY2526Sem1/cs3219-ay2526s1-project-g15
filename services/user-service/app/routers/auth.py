@@ -1,0 +1,153 @@
+import asyncio, hashlib, secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.db.session import get_session
+from app.models.user import User
+from app.models.refresh_token import RefreshToken
+from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn
+from app.schemas.user import UserOut
+from app.models.password_reset import PasswordReset
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
+from app.core.config import settings
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.post("/register", response_model=AuthOut)
+async def register(payload: RegisterIn, request: Request, db: AsyncSession = Depends(get_session)):
+    # unique email
+    q = await db.execute(select(User).where(User.email == payload.email))
+    if q.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already in use")
+
+    now = datetime.now(timezone.utc)
+    uid = str(uuid.uuid4())
+    tid = str(uuid.uuid4())
+
+    user = User(
+        id=uid,
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        name=payload.name,
+    )
+    db.add(user)
+    await db.flush()  
+
+    rt = RefreshToken(
+        id=tid,
+        user=user,
+        hashed="n/a",
+        user_agent=request.headers.get("user-agent") or "n/a",
+        ip=(request.client.host if request.client else None),
+        expires_at=now + timedelta(seconds=settings.REFRESH_TTL_DAYS * 24 * 60 * 60),
+    )
+    db.add(rt)
+
+    await db.commit()
+
+    access = create_access_token(uid, payload.email)
+    refresh = create_refresh_token(uid, tid)
+    return AuthOut(access_token=access, refresh_token=refresh, refresh_token_id=tid)
+
+@router.post("/login", response_model=AuthOut)
+async def login(payload: LoginIn, request: Request, db: AsyncSession = Depends(get_session)):
+    q = await db.execute(select(User).where(User.email == payload.email))
+    user = q.scalar_one_or_none()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    now = datetime.now(timezone.utc)
+
+    if user.locked_until and user.locked_until > now:
+        raise HTTPException(status_code=403, detail="Account is locked. Please try again later.")
+    
+    if not verify_password(payload.password, user.password_hash):
+        user.failed_attempts = (user.failed_attempts or 0) + 1
+        if user.failed_attempts >= 3:
+            user.locked_until = now + timedelta(minutes=15)
+            # stub “email alert”
+            ip = request.client.host if request.client else "unknown"
+            ua = request.headers.get("user-agent")
+            print(f"[ALERT] Suspicious login for {user.email} from {ip} ({ua})")
+        db.add(user)
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    user.failed_attempts = 0
+    user.locked_until = None
+    db.add(user)
+
+
+    tid = str(uuid.uuid4())
+    rt = RefreshToken(
+        id=tid,
+        user_id=user.id,
+        hashed="n/a",
+        user_agent=request.headers.get("user-agent"),
+        ip=request.client.host if request.client else None,
+        expires_at=now + timedelta(seconds=settings.REFRESH_TTL_DAYS * 24 * 60 * 60),
+    )
+    db.add(rt)
+    await db.commit()
+
+    return AuthOut(
+        access_token=create_access_token(user.id, user.email),
+        refresh_token=create_refresh_token(user.id, tid),
+        refresh_token_id=tid,
+    )
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(get_session)):
+    # generate a short code but never reveal account existence
+    q = await db.execute(select(User).where(User.email == payload.email))
+    user = q.scalar_one_or_none()
+    if not user:
+        return {"ok": True}
+
+    code = f"{secrets.randbelow(1000000):06d}"  # 6-digit numeric
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+    pr = PasswordReset(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        code_hash=code_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    db.add(pr)
+    await db.commit()
+
+    # stub "email" — replace with SES/SendGrid later
+    print(f"[RESET] code for {user.email}: {code}")
+    return {"ok": True}
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordIn, db: AsyncSession = Depends(get_session)):
+    # find user
+    q = await db.execute(select(User).where(User.email == payload.email))
+    user = q.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid reset request")
+
+    # latest unused reset
+    q = await db.execute(
+        select(PasswordReset)
+        .where(PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None))
+        .order_by(PasswordReset.created_at.desc())
+    )
+    pr = q.scalars().first()
+    if not pr or pr.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Reset code expired")
+
+    # verify code
+    given_hash = hashlib.sha256(payload.code.encode()).hexdigest()
+    if given_hash != pr.code_hash:
+        raise HTTPException(status_code=401, detail="Invalid reset code")
+
+    # update password & mark used
+    user.password_hash = hash_password(payload.new_password)
+    pr.used_at = datetime.now(timezone.utc)
+    db.add_all([user, pr])
+    await db.commit()
+    return {"ok": True}
