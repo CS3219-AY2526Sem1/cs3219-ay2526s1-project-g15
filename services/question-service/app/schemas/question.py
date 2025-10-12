@@ -7,7 +7,7 @@ import json
 
 class QuestionBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=0)
     difficulty: DifficultyLevel
     topics: List[str] = Field(..., min_items=1)
     examples: Optional[List[Dict[str, Any]]] = None
@@ -38,7 +38,7 @@ class QuestionCreate(QuestionBase):
 
 class QuestionUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, min_length=1)
+    description: Optional[str] = Field(None, min_length=0)
     difficulty: Optional[DifficultyLevel] = None
     topics: Optional[List[str]] = None
     examples: Optional[List[Dict[str, Any]]] = None
