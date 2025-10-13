@@ -239,7 +239,3 @@ volumes:
 ```
 
 ---
-
-## 📄 License
-
-MIT (or your organization’s preferred license).
