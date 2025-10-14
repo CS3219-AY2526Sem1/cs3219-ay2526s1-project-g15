@@ -25,8 +25,6 @@ export default function TopNav() {
         </nav>
 
         <div className="flex items-center gap-3 text-gray-600">
-        {/* TODO: link to notification */}
-          <img src={Notification} alt="Notification bell"  className="h-[30px] w-[30px] object-contain select-none pointer-events-none"/>
           <ProfileMenu avatarSrc={ProfilePic} />
         </div>
       </div>
