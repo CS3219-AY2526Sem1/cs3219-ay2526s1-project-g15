@@ -54,8 +54,8 @@ export default function EditProfile() {
           <Input
             name="email"
             value={form.email}
-            onChange={onChange}
-            className="bg-[#68659A] text-white placeholder-white"
+            readOnly
+            className="bg-gray-400 text-white placeholder-white cursor-not-allowed focus:outline-none focus:ring-0 focus:border-none"
           />
         </section>
 
