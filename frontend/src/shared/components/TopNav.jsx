@@ -18,8 +18,6 @@ export default function TopNav() {
 
         <nav className="flex items-center gap-1">
           <NavLink to="/home" className={linkCls}>Home</NavLink>
-          {/* TODO: Link to sessions page */}
-          <NavLink to="/sessions" className={linkCls}>Sessions</NavLink>
           {/* TODO: Link to history page */}
           <NavLink to="/history" className={linkCls}>History</NavLink>
         </nav>

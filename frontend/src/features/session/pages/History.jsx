@@ -28,7 +28,7 @@ const INITIAL = [
   { id: 8, title: "Interview Question 8", topic: "Math",         difficulty: "Medium",    solved: false },
 ];
 
-export default function Sessions() {
+export default function History() {
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [q, setQ] = useState("");
   const [items] = useState(INITIAL);

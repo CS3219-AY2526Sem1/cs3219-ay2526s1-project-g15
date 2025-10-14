@@ -6,7 +6,7 @@ import Verification from "../features/auth/pages/forgotPassword/Verification";
 import EnterEmail from "../features/auth/pages/forgotPassword/EnterEmail";
 import ForgotPassword from "../features/auth/pages/forgotPassword/ForgotPassword";
 import Home from "../features/home/pages/Home";
-import Sessions from "../features/session/pages/Sessions";
+import History from "../features/session/pages/History";
 import Room from "../features/session/pages/Room";
 import EditProfile from "../features/profile/pages/EditProfile";
 
@@ -20,7 +20,7 @@ export default function RoutesDef() {
       <Route path="/forgotpassword-enter-email" element={<EnterEmail/>}/>
       <Route path="/forgotpassword" element={<ForgotPassword/>}/>
       <Route path="/home" element={<Home />} />
-      <Route path="/sessions" element={<Sessions />} />
+      <Route path="/history" element={<History />} />
       <Route path="/session/active" element={<Room />} />
       <Route path="/profile/edit" element={<EditProfile />} />
       <Route path="*" element={<Navigate to="/" replace />} />
