@@ -53,7 +53,7 @@ export default function Login() {
 
          {/* TODO: forgot password logic */}
           <div className="pt-1 pb-1">
-            <Link to="/forgotpassword-verification" className="text-[#262D6C] font-medium underline">
+            <Link to="/forgotpassword-enter-email" className="text-[#262D6C] font-medium underline">
               Forgot Password?
             </Link>
           </div>
