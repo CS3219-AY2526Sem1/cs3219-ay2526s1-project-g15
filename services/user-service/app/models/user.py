@@ -16,6 +16,7 @@ class User(Base):
 
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken",

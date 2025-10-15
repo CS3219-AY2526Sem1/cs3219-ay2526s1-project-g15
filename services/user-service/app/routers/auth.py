@@ -1,7 +1,7 @@
 import asyncio, hashlib, secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_session
@@ -10,8 +10,10 @@ from app.models.refresh_token import RefreshToken
 from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn
 from app.schemas.user import UserOut
 from app.models.password_reset import PasswordReset
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, create_verification_token
 from app.core.config import settings
+from app.core.email import send_verification_email
+from jose import JWTError, jwt
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,6 +51,8 @@ async def register(payload: RegisterIn, request: Request, db: AsyncSession = Dep
 
     access = create_access_token(uid, payload.email)
     refresh = create_refresh_token(uid, tid)
+    token = create_verification_token(uid)
+    asyncio.create_task(send_verification_email(payload.email, token))
     return AuthOut(access_token=access, refresh_token=refresh, refresh_token_id=tid)
 
 @router.post("/login", response_model=AuthOut)
@@ -57,6 +61,9 @@ async def login(payload: LoginIn, request: Request, db: AsyncSession = Depends(g
     user = q.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not getattr(user, "is_verified", False):
+        raise HTTPException(status_code=403, detail="Email not verified")
 
     now = datetime.now(timezone.utc)
 
@@ -151,3 +158,28 @@ async def reset_password(payload: ResetPasswordIn, db: AsyncSession = Depends(ge
     db.add_all([user, pr])
     await db.commit()
     return {"ok": True}
+
+@router.get("/verify-email")
+async def verify_email(token: str = Query(...), db: AsyncSession = Depends(get_session)):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "verify":
+            raise HTTPException(status_code=400, detail="Invalid token type")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid token payload")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+    q = await db.execute(select(User).where(User.id == user_id))
+    user = q.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not getattr(user, "is_verified", False):
+        user.is_verified = True
+        db.add(user)
+        await db.commit()
+
+    return {"ok": True}
+    
