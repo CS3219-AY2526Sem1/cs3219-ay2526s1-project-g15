@@ -18,15 +18,11 @@ export default function TopNav() {
 
         <nav className="flex items-center gap-1">
           <NavLink to="/home" className={linkCls}>Home</NavLink>
-          {/* TODO: Link to sessions page */}
-          <NavLink to="/sessions" className={linkCls}>Sessions</NavLink>
           {/* TODO: Link to history page */}
           <NavLink to="/history" className={linkCls}>History</NavLink>
         </nav>
 
         <div className="flex items-center gap-3 text-gray-600">
-        {/* TODO: link to notification */}
-          <img src={Notification} alt="Notification bell"  className="h-[30px] w-[30px] object-contain select-none pointer-events-none"/>
           <ProfileMenu avatarSrc={ProfilePic} />
         </div>
       </div>
