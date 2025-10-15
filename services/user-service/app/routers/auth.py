@@ -1,7 +1,7 @@
 import asyncio, hashlib, secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_session
@@ -12,7 +12,7 @@ from app.schemas.user import UserOut
 from app.models.password_reset import PasswordReset
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, create_verification_token
 from app.core.config import settings
-from app.core.email import send_verification_email
+from app.core.email import send_verification_email, send_reset_code_email
 from jose import JWTError, jwt
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -107,7 +107,7 @@ async def login(payload: LoginIn, request: Request, db: AsyncSession = Depends(g
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(get_session)):
+async def forgot_password(payload: ForgotPasswordIn, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_session)):
     # generate a short code but never reveal account existence
     q = await db.execute(select(User).where(User.email == payload.email))
     user = q.scalar_one_or_none()
@@ -125,8 +125,8 @@ async def forgot_password(payload: ForgotPasswordIn, db: AsyncSession = Depends(
     db.add(pr)
     await db.commit()
 
-    # stub "email" — replace with SES/SendGrid later
-    print(f"[RESET] code for {user.email}: {code}")
+    background_tasks.add_task(send_reset_code_email, user.email, code)
+
     return {"ok": True}
 
 @router.post("/reset-password")
