@@ -21,7 +21,7 @@ export default function RoutesDef() {
       <Route path="/forgotpassword" element={<ForgotPassword/>}/>
       <Route path="/home" element={<Home />} />
       <Route path="/history" element={<History />} />
-      <Route path="/session/active" element={<Room />} />
+      <Route path="/session/active/:sessionId" element={<Room />} />
       <Route path="/profile/edit" element={<EditProfile />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

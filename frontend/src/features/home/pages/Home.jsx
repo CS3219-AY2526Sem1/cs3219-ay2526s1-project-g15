@@ -92,7 +92,13 @@ export default function Home() {
     // stop timers
     clearTimeout(timeoutRef?.current);
     clearInterval(pollRef?.current);
-    navigate("/session/active");
+    
+    // temporary session and user details (replaced with response from matching service)
+    const tempSessionId = "session123";
+    const tempUserId = "demoUser1";
+    const tempUsername = "DemoUser";
+
+    navigate(`/session/active/${tempSessionId}?user_id=${tempUserId}&username=${tempUsername}`);
   };
 
   const retry = () => startSearch();
