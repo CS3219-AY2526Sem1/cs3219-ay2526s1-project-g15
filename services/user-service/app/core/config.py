@@ -17,14 +17,14 @@ class Settings(BaseSettings):
     ACCESS_TTL_MIN: int = 15
     REFRESH_TTL_DAYS: int = 7
 
-    MAIL_USERNAME: str = "you@example.com"
-    MAIL_PASSWORD: str = "password"
-    MAIL_FROM: str = "no-reply@example.com"
+    MAIL_USERNAME: str = "peerprep244@gmail.com"
+    MAIL_PASSWORD: str = "gjxr mone bqkp aanh"
+    MAIL_FROM: str = "peerprep244@gmail.com"
     MAIL_FROM_NAME: str = "PeerPrep"
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.example.com"
-    MAIL_STARTTLS: bool = True
-    MAIL_SSL_TLS: bool = False
+    MAIL_PORT: int = 465
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_STARTTLS: bool = False
+    MAIL_SSL_TLS: bool = True
     USE_CREDENTIALS: bool = True
     VALIDATE_CERTS: bool = True
     SUPPRESS_SEND: int = 0

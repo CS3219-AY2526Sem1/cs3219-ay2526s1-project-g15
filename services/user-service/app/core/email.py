@@ -1,4 +1,3 @@
-# app/core/email.py
 import aiosmtplib
 from email.mime.text import MIMEText
 from app.core.config import settings
@@ -11,12 +10,12 @@ async def send_verification_email(email: str, token: str) -> None:
     msg["To"] = email
 
     await aiosmtplib.send(
-        message=msg,
-        hostname=settings.MAIL_SERVER,
-        port=settings.MAIL_PORT,
-        start_tls=getattr(settings, "MAIL_STARTTLS", True),
-        use_tls=getattr(settings, "MAIL_SSL_TLS", False),
-        username=settings.MAIL_USERNAME if getattr(settings, "USE_CREDENTIALS", True) else None,
-        password=settings.MAIL_PASSWORD if getattr(settings, "USE_CREDENTIALS", True) else None,
-        timeout=30,
+        message = msg,
+        hostname = "smtp.gmail.com",
+        port = 465,
+        start_tls = False,
+        use_tls = True,
+        username = settings.MAIL_USERNAME,
+        password = settings.MAIL_PASSWORD,
+        timeout = 30,
     )
