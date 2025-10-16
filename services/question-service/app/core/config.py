@@ -21,9 +21,8 @@ class Settings(BaseSettings):
     db_password: str = "peerprep"
     db_name: str = "peerprep_questions"
 
-    # JWT settings
-    jwt_secret: str
-    jwt_alg: str = "HS256"
+    # User Service settings (for API calls)
+    user_service_url: str = "http://localhost:8001"
 
     # AWS settings
     aws_region: str = "us-east-1"

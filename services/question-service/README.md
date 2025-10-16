@@ -79,13 +79,34 @@ python scripts/database_architecture_setup.py
 
 **Base URL:** `http://localhost:8003`
 
-- `GET /api/v1/questions/` - List questions (with filtering)
+### Question Management
+- `GET /api/v1/questions/` - List questions (with pagination and filtering)
 - `GET /api/v1/questions/{id}` - Get specific question
-- `POST /api/v1/questions/` - Create question (Admin)
-- `PUT /api/v1/questions/{id}` - Update question (Admin)
-- `DELETE /api/v1/questions/{id}` - Delete question (Admin)
+- `GET /api/v1/questions/{id}/preview` - Preview question (user view)
+- `POST /api/v1/questions/` - Create question (Admin only)
+- `PUT /api/v1/questions/{id}` - Update question (Admin only)
+- `DELETE /api/v1/questions/{id}` - Delete question (Admin only)
+- `PUT /api/v1/questions/{id}/toggle-status` - Enable/disable question (Admin only)
 
-**Documentation:** http://localhost:8003/docs
+### Advanced Filtering
+- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty
+  - Query Parameters:
+    - `topics` (optional): Array of topic strings (e.g., `topics=Array&topics=Hash Table`)
+    - `difficulty` (optional): Difficulty level (`easy`, `medium`, `hard`)
+  - Examples:
+    - Filter by difficulty only: `/api/v1/questions/filter/topics-difficulty?difficulty=easy`
+    - Filter by topics only: `/api/v1/questions/filter/topics-difficulty?topics=Array&topics=String`
+    - Combined filtering: `/api/v1/questions/filter/topics-difficulty?difficulty=medium&topics=Dynamic Programming`
+
+### Standard Filtering (via /questions endpoint)
+- Query Parameters:
+  - `skip` - Number of items to skip (pagination)
+  - `limit` - Number of items to return (max 100)
+  - `difficulty` - Filter by difficulty level
+  - `topics` - Filter by topics (comma-separated)
+  - `search` - Search in title and description
+
+**Interactive Documentation:** http://localhost:8003/docs
 
 ## Development
 
@@ -101,13 +122,23 @@ pytest test_service.py -v
 
 **Environment Variables:**
 - `DATABASE_URL` - PostgreSQL connection string
-- `JWT_SECRET` - Token validation secret
+- `USER_SERVICE_URL` - User service API URL for auth calls (default: http://localhost:8001)
 - `ENV` - Environment (dev/staging/prod)
 - `PORT` - Service port (default: 8003)
 
 **Package Notes:**
 - Uses `psycopg[binary]` (psycopg3) instead of psycopg2-binary for better Windows compatibility
 - All tests should pass with proper database connection
+- Authentication currently uses placeholder functions - ready for User Service integration
+
+**Testing the API:**
+```powershell
+# Test basic questions list
+Invoke-WebRequest -Uri "http://localhost:8003/api/v1/questions" -Method GET
+
+# Test new filtering endpoint
+Invoke-WebRequest -Uri "http://localhost:8003/api/v1/questions/filter/topics-difficulty?difficulty=easy&topics=Array" -Method GET
+```
 
 ## Troubleshooting
 

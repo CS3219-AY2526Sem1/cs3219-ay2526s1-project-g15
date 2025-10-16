@@ -144,3 +144,23 @@ class QuestionService:
         db.delete(db_question)
         db.commit()
         return True
+
+    @staticmethod
+    def get_questions_by_topics_and_difficulty(
+        db: Session,
+        topics: Optional[List[str]] = None,
+        difficulty: Optional[str] = None
+    ) -> List[Question]:
+        """Get questions filtered by topics and/or difficulty level"""
+        query = db.query(Question).filter(Question.is_active == True)
+
+        if difficulty:
+            query = query.filter(Question.difficulty == difficulty)
+
+        if topics:
+            topic_conditions = []
+            for topic in topics:
+                topic_conditions.append(Question.topics.contains(f'"{topic}"'))
+            query = query.filter(or_(*topic_conditions))
+
+        return query.all()

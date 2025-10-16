@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
-from app.core.auth import verify_token
+from app.core.auth import verify_token, require_admin
 from app.schemas.question import (
     QuestionCreate,
     QuestionUpdate,
@@ -21,9 +21,9 @@ router = APIRouter(prefix="/questions", tags=["questions"])
 def create_question(
     question: QuestionCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    current_admin: dict = Depends(require_admin)
 ):
-    """Create a new question"""
+    """Create a new question (Admin only)"""
     return QuestionService.create_question(db=db, question_data=question)
 
 
@@ -34,8 +34,8 @@ def get_questions(
     difficulty: Optional[DifficultyLevel] = Query(None, description="Filter by difficulty"),
     topics: Optional[List[str]] = Query(None, description="Filter by topics"),
     search: Optional[str] = Query(None, description="Search in title and description"),
-    db: Session = Depends(get_db)
-    # current_user: dict = Depends(verify_token)  # Temporarily disabled for testing
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(verify_token)
 ):
     """Get questions with pagination and filtering"""
     skip = (page - 1) * per_page
@@ -59,8 +59,8 @@ def get_questions(
 @router.get("/{question_id}", response_model=QuestionResponse)
 def get_question(
     question_id: int,
-    db: Session = Depends(get_db)
-    # current_user: dict = Depends(verify_token)  # Temporarily disabled for testing
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(verify_token)
 ):
     """Get a specific question by ID"""
     question = QuestionService.get_question(db=db, question_id=question_id)
@@ -77,7 +77,7 @@ def update_question(
     question_id: int,
     question: QuestionUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_admin)
 ):
     """Update a question"""
     updated_question = QuestionService.update_question(
@@ -95,7 +95,7 @@ def update_question(
 def delete_question(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_admin)
 ):
     """Delete a question"""
     success = QuestionService.delete_question(db=db, question_id=question_id)
@@ -110,7 +110,7 @@ def delete_question(
 def toggle_question_status(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_admin)
 ):
     """Toggle question visibility (enable/disable)"""
     question = QuestionService.get_question(db=db, question_id=question_id)
@@ -143,3 +143,39 @@ def preview_question(
             detail="Question not found"
         )
     return question
+
+
+@router.get("/filter/topics-difficulty", response_model=List[QuestionResponse])
+def get_questions_by_topics_and_difficulty(
+    topics: Optional[List[str]] = Query(None, description="List of topics to filter by"),
+    difficulty: Optional[str] = Query(None, description="Difficulty level (easy, medium, hard)"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(verify_token)
+):
+    """Get questions filtered by topics and/or difficulty level"""
+    try:
+        # Use the existing get_questions method with filters
+        from app.schemas.question import QuestionFilter
+
+        # Create filter object
+        filter_data = {}
+        if difficulty:
+            # Convert string to DifficultyLevel enum
+            filter_data['difficulty'] = DifficultyLevel(difficulty)
+        if topics:
+            filter_data['topics'] = topics
+
+        filter_obj = QuestionFilter(**filter_data) if filter_data else None
+
+        questions, _ = QuestionService.get_questions(
+            db=db, skip=0, limit=100, filters=filter_obj, include_inactive=False
+        )
+        return questions
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Error in filtering endpoint: {e}")
+        # Return all questions as fallback
+        questions, _ = QuestionService.get_questions(
+            db=db, skip=0, limit=100, filters=None, include_inactive=False
+        )
+        return questions
