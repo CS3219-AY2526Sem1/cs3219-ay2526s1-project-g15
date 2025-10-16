@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
-from app.core.auth import verify_token, require_admin
+from app.core.auth import verify_token, require_admin, get_question_filter_context
 from app.schemas.question import (
     QuestionCreate,
     QuestionUpdate,
@@ -36,14 +36,18 @@ def get_questions(
     topics: Optional[List[str]] = Query(None, description="Filter by topics"),
     search: Optional[str] = Query(None, description="Search in title and description"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Get questions with pagination and filtering"""
+    """Get questions with pagination and filtering (admins see all, users see active only)"""
     skip = (page - 1) * per_page
 
     filters = QuestionFilter(difficulty=difficulty, topics=topics, search=search)
     questions, total = QuestionService.get_questions(
-        db=db, skip=skip, limit=per_page, filters=filters
+        db=db, 
+        skip=skip, 
+        limit=per_page, 
+        filters=filters,
+        include_inactive=auth_context["is_admin"]  # Admins can see inactive questions
     )
 
     total_pages = math.ceil(total / per_page) if total > 0 else 1
@@ -61,15 +65,23 @@ def get_questions(
 def get_question(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Get a specific question by ID"""
+    """Get a specific question by ID (admins can see inactive questions)"""
     question = QuestionService.get_question(db=db, question_id=question_id)
     if not question:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found"
         )
+    
+    # Non-admins can only see active questions
+    if not auth_context["is_admin"] and not question.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"  # Don't reveal that inactive questions exist
+        )
+    
     return question
 
 
@@ -134,15 +146,23 @@ def toggle_question_status(
 def preview_question(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Preview question as end-users will see it"""
+    """Preview question as end-users will see it (only shows active questions to non-admins)"""
     question = QuestionService.get_question(db=db, question_id=question_id)
     if not question:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found"
         )
+    
+    # Non-admins can only preview active questions
+    if not auth_context["is_admin"] and not question.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+    
     return question
 
 
@@ -151,9 +171,9 @@ def get_questions_by_topics_and_difficulty(
     topics: Optional[List[str]] = Query(None, description="List of topics to filter by"),
     difficulty: Optional[str] = Query(None, description="Difficulty level (easy, medium, hard)"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(verify_token)
+    auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Get questions filtered by topics and/or difficulty level"""
+    """Get questions filtered by topics and/or difficulty (admins see all, users see active only)"""
     try:
         # Use the existing get_questions method with filters
         from app.schemas.question import QuestionFilter
@@ -169,7 +189,7 @@ def get_questions_by_topics_and_difficulty(
         filter_obj = QuestionFilter(**filter_data) if filter_data else None
 
         questions, _ = QuestionService.get_questions(
-            db=db, skip=0, limit=100, filters=filter_obj, include_inactive=False
+            db=db, skip=0, limit=100, filters=filter_obj, include_inactive=auth_context["is_admin"]
         )
         return questions
     except Exception as e:
@@ -177,6 +197,6 @@ def get_questions_by_topics_and_difficulty(
         print(f"Error in filtering endpoint: {e}")
         # Return all questions as fallback
         questions, _ = QuestionService.get_questions(
-            db=db, skip=0, limit=100, filters=None, include_inactive=False
+            db=db, skip=0, limit=100, filters=None, include_inactive=auth_context["is_admin"]
         )
         return questions

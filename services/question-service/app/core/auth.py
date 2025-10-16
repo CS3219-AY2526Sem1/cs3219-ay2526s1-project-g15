@@ -160,3 +160,25 @@ def require_admin(current_user: dict = Depends(verify_token)) -> dict:
         )
 
     return current_user
+
+
+def get_question_filter_context(current_user: dict = Depends(verify_token)) -> dict:
+    """
+    Get filtering context for questions based on user permissions.
+    
+    Regular users can only see active questions (is_active=True).
+    Admins can see all questions regardless of active status.
+    
+    Returns:
+        dict: Context with user info and filtering requirements
+    """
+    user_id = current_user.get("user_id")
+    
+    # Check if user is admin
+    is_admin = verify_admin_with_user_service(user_id) if user_id else False
+    
+    return {
+        "user": current_user,
+        "is_admin": is_admin,
+        "filter_active_only": not is_admin  # Non-admins get filtered results
+    }
