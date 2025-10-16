@@ -13,7 +13,7 @@ export default function Verification() {
 
   const validate = () => {
     const e = {};
-    if (!form.code.trim()) e.code = "Please input the email code.";
+    if (!form.code.trim()) e.code = "Please input the verification code.";
     return e;
   };
 
@@ -22,7 +22,7 @@ export default function Verification() {
     const eObj = validate();
     setErrors(eObj);
     if (Object.keys(eObj).length === 0) {
-      // TODO: backend logic when inputting email code
+      // TODO: backend logic when inputting verification code
       navigate("/forgotpassword");
     }
   };
@@ -30,12 +30,12 @@ export default function Verification() {
   return (
     <main className="min-h-screen bg-white flex items-center justify-center px-4">
       <AuthCard title="PeerPrep">
-        <p className="mb-5 text-[20px] text-[#262D6C]">You have been sent a code to the email you used to sign up with PeerPrep. Please input the email code below:</p>
+        <p className="mb-5 text-[20px] text-[#262D6C]">You have been sent a code to the email you used to sign up with PeerPrep. Please input the verification code below:</p>
         <form className="space-y-4" onSubmit={onSubmit} noValidate>
           <Input
             name="code"
             type="code"
-            placeholder="Enter Email code"
+            placeholder="Enter verification code"
             value={form.code}
             onChange={onChange}
             error={errors.code}

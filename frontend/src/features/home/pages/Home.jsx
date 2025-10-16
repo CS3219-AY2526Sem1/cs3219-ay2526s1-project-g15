@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../components/OngoingMeetingCard";
@@ -6,28 +6,48 @@ import DifficultyPicker from "../components/DifficultyPicker";
 import TopicSelect from "../components/TopicSelect";
 
 export default function Home() {
-  // Toggle to demo the sidebar
+  // toggle to demo the sidebar
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [difficulty, setDifficulty] = useState("Medium");
-  const [topic, setTopic] = useState("Arrays");
   const navigate = useNavigate();
+
+  // TODO: fetch from backend
+  const topics = useMemo(
+    () => ["Arrays", "Strings", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Math"],
+    []
+  );
+  const completedTopics = ["Arrays", "Graphs"]; 
+
+  const firstAvailableTopic = useMemo(
+    () => topics.find((t) => !completedTopics.includes(t)) || "",
+    [topics, completedTopics]
+  );
+
+  // pick the first available topic by default
+  const [topic, setTopic] = useState(firstAvailableTopic);
+
+  // if completion list or topics change (e.g., after fetch), keep topic valid
+  useEffect(() => {
+    if (!topic || completedTopics.includes(topic)) {
+      setTopic(firstAvailableTopic);
+    }
+  }, [completedTopics, firstAvailableTopic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rejoinMeeting = () => {
     alert("Rejoining your ongoing meeting…");
-    // TODO: Navigate to meeting room once pressed
+    // TODO: navigate to meeting room once pressed
   };
 
   const [status, setStatus] = useState("idle");
   const timer = useRef(null);
-  
+
   // timout: after 60s
   const SEARCH_TIMEOUT_MS = 60_000;
   // check every 1.5s if there is a match
-  const POLL_INTERVAL_MS  = 1500; 
+  const POLL_INTERVAL_MS = 1500;
 
   const timeoutRef = useRef(null);
-  const pollRef    = useRef(null);
-
+  const pollRef = useRef(null);
 
   const startSearch = () => {
     setStatus("searching");
@@ -49,7 +69,7 @@ export default function Home() {
       if (found) {
         clearTimeout(timeoutRef.current);
         clearInterval(pollRef.current);
-        setStatus("found");              
+        setStatus("found");
       }
     }, POLL_INTERVAL_MS);
   };
@@ -69,20 +89,29 @@ export default function Home() {
 
   // TODO: confirm match logic: navigate user to the correct meeting room
   const confirmMatch = () => {
-    // stop timers 
+    // stop timers
     clearTimeout(timeoutRef?.current);
     clearInterval(pollRef?.current);
-    navigate("/session/active"); 
+    
+    // temporary session and user details (replaced with response from matching service)
+    const tempSessionId = "session123";
+    const tempUserId = "demoUser1";
+    const tempUsername = "DemoUser";
+
+    navigate(`/session/active/${tempSessionId}?user_id=${tempUserId}&username=${tempUsername}`);
   };
-  
+
   const retry = () => startSearch();
+
+  const topicCompleted = topic && completedTopics.includes(topic);
+  const allCompleted = topics.every((t) => completedTopics.includes(t));
+  const disableStart = !topic || topicCompleted || allCompleted;
 
   return (
     <div className="min-h-screen bg-[#D7D6E6]">
       <TopNav />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="flex gap-6">
-          {/* Sidebar shows only if there is an ongoing meeting */}
           {hasOngoingMeeting && <OngoingMeetingCard onRejoin={rejoinMeeting} />}
 
           <section className="flex-1 rounded-2xl bg-white p-8 shadow border border-gray-200">
@@ -94,13 +123,35 @@ export default function Home() {
 
                 <div className="mt-8 space-y-8 flex flex-col items-center">
                   <DifficultyPicker value={difficulty} onChange={setDifficulty} />
-                  <TopicSelect value={topic} onChange={setTopic} />
+
+                  <TopicSelect
+                    value={topic}
+                    onChange={setTopic}
+                    topics={topics}
+                    completedTopics={completedTopics}
+                  />
+
+                  {topicCompleted && (
+                    <p className="text-sm text-red-600">
+                      You’ve completed all questions for <strong>{topic}</strong>. Please choose another topic.
+                    </p>
+                  )}
+
+                  {/* if everything is completed */}
+                  {allCompleted && (
+                    <p className="text-sm text-amber-700 text-center">
+                      Yay! You’ve completed every available topic! Check back later for new topics!
+                    </p>
+                  )}
 
                   <button
                     onClick={startSearch}
-                    className="mt-2 inline-flex items-center justify-center rounded-2xl
-                               bg-[#4A53A7] text-white text-2xl font-bold px-8 py-3 w-[320px]
-                               hover:opacity-95"
+                    disabled={disableStart}
+                    className={`mt-2 inline-flex items-center justify-center rounded-2xl
+                               text-white text-2xl font-bold px-8 py-3 w-[320px]
+                               hover:opacity-95
+                               ${disableStart ? "bg-gray-400 cursor-not-allowed" : "bg-[#4A53A7]"}`}
+                    title={disableStart ? "Please choose a topic you haven't completed" : ""}
                   >
                     Start Match!
                   </button>
@@ -111,9 +162,7 @@ export default function Home() {
             {/* spinner */}
             {status === "searching" && (
               <div className="h-[420px] w-full flex flex-col items-center justify-center gap-6">
-                <h2 className="text-xl md:text-2xl font-bold text-[#262D6C]">
-                  Finding your match...
-                </h2>
+                <h2 className="text-xl md:text-2xl font-bold text-[#262D6C]">Finding your match...</h2>
 
                 <div className="relative h-24 w-24">
                   <div className="absolute inset-0 rounded-full border-8 border-gray-200/70" />
@@ -129,7 +178,13 @@ export default function Home() {
             {status === "found" && (
               <div className="h-[420px] w-full flex flex-col items-center justify-center gap-3">
                 {/* Checkmark icon */}
-                <svg viewBox="0 0 24 24" className="h-12 w-12 mb-2 text-[#2E2F74]" fill="none" stroke="currentColor" strokeWidth="3">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-12 w-12 mb-2 text-[#2E2F74]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
 
@@ -159,7 +214,13 @@ export default function Home() {
             {status === "no_match" && (
               <div className="h-[420px] w-full flex flex-col items-center justify-center gap-3">
                 {/* Cross icon */}
-                <svg viewBox="0 0 24 24" className="h-16 w-16 text-[#2E2F74]" fill="none" stroke="currentColor" strokeWidth="3">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-16 w-16 text-[#2E2F74]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>
 
@@ -179,7 +240,7 @@ export default function Home() {
           </section>
         </div>
 
-        {/* TODO: remove this once logic for whether or not there is an ongoing meeting is up*/}
+        {/* TODO: remove this once logic for whether or not there is an ongoing meeting is up */}
         <div className="mt-6 text-sm text-gray-600">
           <label className="inline-flex items-center gap-2 cursor-pointer select-none">
             <input

@@ -1,9 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import ProblemPanel from "../components/ProblemPanel";
 import CodeEditor from "../../../shared/components/CodeEditor";
+import useCollaborationSocket from "../hooks/useCollaborationSocket";
 
 export default function Room() {
+  const { sessionId } = useParams();
+  const [searchParams] = useSearchParams();
+  const userId = searchParams.get("user_id") || crypto.randomUUID();
+  const username = searchParams.get("username") || "Guest";
+
   {/* TODO: change based on the question in backend */}
   const [code, setCode] = useState(`// Write your solution here
 function hasCycle(head){
@@ -14,6 +21,38 @@ function hasCycle(head){
   const [activeCase, setActiveCase] = useState(1);
   const [language, setLanguage] = useState("javascript");
   
+  const { socketReady, sessionState, sendMessage } =
+    useCollaborationSocket(sessionId, userId, username);
+
+  // when we receive a session state from backend, update editor
+  useEffect(() => {
+    if (sessionState?.code !== undefined && sessionState.code !== code) {
+      setCode(sessionState.code);
+    }
+    if (sessionState?.language && sessionState.language !== language) {
+      setLanguage(sessionState.language);
+    }
+  }, [sessionState?.code, sessionState?.language]);
+
+  // when user types in editor, broadcast code updates (debounced)
+  useEffect(() => {
+    if (!socketReady) return;
+
+    const debounce = setTimeout(() => {
+      sendMessage("code_update", { code });
+    }, 400);
+
+    return () => clearTimeout(debounce);
+  }, [code, socketReady]);
+
+  // when user changes language
+  useEffect(() => {
+    if (socketReady) {
+      sendMessage("language_change", { language });
+    }
+  }, [language, socketReady]);
+
+  // when user presses "Run" button to run code
   const runCode = (src, lang) => {
     alert(`Run pressed\nLanguage: ${lang}\n\n${src.slice(0, 80)}...`);
   };
@@ -34,6 +73,18 @@ function hasCycle(head){
             </div>
 
             <section className="lg:col-span-2 rounded-2xl bg-white p-4 border shadow-inner flex flex-col">
+              {/* Connection status */}
+              {!socketReady && (
+                <p className="text-sm text-gray-500 mb-2">
+                  Connecting to collaboration service...
+                </p>
+              )}
+              {socketReady && (
+                <p className="text-sm text-green-600 mb-2">
+                  Connected as <b>{username}</b>
+                </p>
+              )}
+              
               {/* Code editor with its own header bar */}
               <CodeEditor
                 filename={filenameByLang(language)}
