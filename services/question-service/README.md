@@ -80,8 +80,8 @@ python scripts/database_architecture_setup.py
 **Base URL:** `http://localhost:8003`
 
 ### Question Management
-- `GET /api/v1/questions/` - List questions (with pagination and filtering)
-- `GET /api/v1/questions/{id}` - Get specific question
+- `GET /api/v1/questions/` - List questions (minimal format for performance)
+- `GET /api/v1/questions/{id}` - Get specific question (full details)
 - `GET /api/v1/questions/{id}/preview` - Preview question (user view)
 - `POST /api/v1/questions/` - Create question (Admin only)
 - `PUT /api/v1/questions/{id}` - Update question (Admin only)
@@ -89,7 +89,7 @@ python scripts/database_architecture_setup.py
 - `PUT /api/v1/questions/{id}/toggle-status` - Enable/disable question (Admin only)
 
 ### Advanced Filtering
-- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty
+- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format for performance)
   - Query Parameters:
     - `topics` (optional): Array of topic strings (e.g., `topics=Array&topics=Hash Table`)
     - `difficulty` (optional): Difficulty level (`easy`, `medium`, `hard`)
@@ -110,7 +110,23 @@ python scripts/database_architecture_setup.py
 
 ## Question JSON Format
 
-### Question Response Format
+### Minimal Question Response Format (Lists & Filters)
+For performance, list endpoints and filters return only essential fields:
+```json
+{
+  "id": 1,
+  "title": "Two Sum",
+  "difficulty": "easy",
+  "topics": ["Array", "Hash Table"],
+  "is_active": true
+}
+```
+
+**Used by:**
+- `GET /api/v1/questions/` (question lists)
+- `GET /api/v1/questions/filter/topics-difficulty` (filtered results)
+
+### Full Question Response Format (Individual Questions)
 ```json
 {
   "id": 1,

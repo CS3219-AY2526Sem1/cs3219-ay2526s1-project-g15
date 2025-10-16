@@ -7,6 +7,7 @@ from app.schemas.question import (
     QuestionCreate,
     QuestionUpdate,
     QuestionResponse,
+    QuestionMinimal,
     QuestionList,
     QuestionFilter
 )
@@ -145,7 +146,7 @@ def preview_question(
     return question
 
 
-@router.get("/filter/topics-difficulty", response_model=List[QuestionResponse])
+@router.get("/filter/topics-difficulty", response_model=List[QuestionMinimal])
 def get_questions_by_topics_and_difficulty(
     topics: Optional[List[str]] = Query(None, description="List of topics to filter by"),
     difficulty: Optional[str] = Query(None, description="Difficulty level (easy, medium, hard)"),

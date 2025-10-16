@@ -63,6 +63,36 @@ class QuestionUpdate(BaseModel):
         return v
 
 
+class QuestionMinimal(BaseModel):
+    """Minimal question response for lists and filters - faster performance"""
+    id: int
+    title: str
+    difficulty: DifficultyLevel
+    topics: List[str]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+    @validator('topics', pre=True)
+    def parse_topics(cls, v):
+        if isinstance(v, str):
+            parsed_topics = json.loads(v)
+            # Handle both string topics and object topics from LeetCode API
+            if isinstance(parsed_topics, list):
+                result = []
+                for topic in parsed_topics:
+                    if isinstance(topic, str):
+                        result.append(topic)
+                    elif isinstance(topic, dict) and 'name' in topic:
+                        result.append(topic['name'])
+                    else:
+                        result.append(str(topic))  # Fallback
+                return result
+            return parsed_topics
+        return v
+
+
 class QuestionResponse(QuestionBase):
     id: int
     created_at: datetime
@@ -109,7 +139,7 @@ class QuestionResponse(QuestionBase):
 
 
 class QuestionList(BaseModel):
-    questions: List[QuestionResponse]
+    questions: List[QuestionMinimal]
     total: int
     page: int
     per_page: int
