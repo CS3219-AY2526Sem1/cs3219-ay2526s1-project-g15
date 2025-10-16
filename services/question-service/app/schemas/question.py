@@ -74,7 +74,19 @@ class QuestionResponse(QuestionBase):
     @validator('topics', pre=True)
     def parse_topics(cls, v):
         if isinstance(v, str):
-            return json.loads(v)
+            parsed_topics = json.loads(v)
+            # Handle both string topics and object topics
+            if isinstance(parsed_topics, list):
+                result = []
+                for topic in parsed_topics:
+                    if isinstance(topic, str):
+                        result.append(topic)
+                    elif isinstance(topic, dict) and 'name' in topic:
+                        result.append(topic['name'])
+                    else:
+                        result.append(str(topic))  # Fallback
+                return result
+            return parsed_topics
         return v
 
     @validator('examples', pre=True)

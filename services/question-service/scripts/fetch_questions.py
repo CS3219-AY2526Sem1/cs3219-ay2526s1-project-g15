@@ -33,6 +33,7 @@ def map_difficulty(difficulty_str):
 def fetch_problems_from_alfa_api(limit=50):
     """
     Fetch problems from Alfa LeetCode API
+    Enhanced to extract comprehensive test case data
     """
     print(f"Fetching {limit} problems from Alfa LeetCode API...")
 
@@ -69,18 +70,70 @@ def fetch_problems_from_alfa_api(limit=50):
                             "is_active": True
                         }
 
-                        # Extract examples if available
+                        # Extract examples from API and use them as test cases for PeerPrep
+                        examples = []
+                        test_cases = []
+
                         if 'exampleTestcases' in detail_data:
-                            examples = []
-                            test_cases = detail_data.get('exampleTestcases', '').split('\n')
-                            for i in range(0, len(test_cases), 2):
-                                if i + 1 < len(test_cases):
-                                    examples.append({
-                                        "input": test_cases[i],
-                                        "output": test_cases[i + 1],
+                            raw_test_cases = detail_data.get('exampleTestcases', '').strip().split('\n')
+
+                            # Parse test cases - format is usually input/output pairs
+                            for i in range(0, len(raw_test_cases), 2):
+                                if i + 1 < len(raw_test_cases):
+                                    input_data = raw_test_cases[i].strip()
+                                    expected_output = raw_test_cases[i + 1].strip()
+
+                                    # Add to examples for display in problem description
+                                    example = {
+                                        "input": input_data,
+                                        "output": expected_output,
                                         "explanation": ""
-                                    })
+                                    }
+                                    examples.append(example)
+
+                                    # Use the same examples as test cases for PeerPrep validation
+                                    # Try to parse as structured data for better validation
+                                    try:
+                                        import ast
+                                        # Attempt to parse input and output as Python literals
+                                        parsed_input = ast.literal_eval(input_data)
+                                        parsed_output = ast.literal_eval(expected_output)
+
+                                        test_case = {
+                                            "input": parsed_input,
+                                            "output": parsed_output
+                                        }
+                                    except:
+                                        # If parsing fails, store as strings (still usable for comparison)
+                                        test_case = {
+                                            "input": input_data,
+                                            "output": expected_output
+                                        }
+
+                                    test_cases.append(test_case)
+
                             question_data["examples"] = examples
+                            question_data["test_cases"] = test_cases
+
+                        # Fallback: if no exampleTestcases, look for other sample data
+                        if not examples and 'sampleTestCase' in detail_data:
+                            sample_test = detail_data.get('sampleTestCase', '')
+                            if sample_test:
+                                example = {
+                                    "input": sample_test,
+                                    "output": "See problem description",
+                                    "explanation": "Sample from API"
+                                }
+                                examples.append(example)
+
+                                # Also add as test case
+                                test_cases.append({
+                                    "input": sample_test,
+                                    "output": "See problem description"
+                                })
+
+                                question_data["examples"] = examples
+                                question_data["test_cases"] = test_cases
 
                         questions.append(question_data)
 

@@ -108,6 +108,77 @@ python scripts/database_architecture_setup.py
 
 **Interactive Documentation:** http://localhost:8003/docs
 
+## Question JSON Format
+
+### Question Response Format
+```json
+{
+  "id": 1,
+  "title": "Two Sum",
+  "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+  "difficulty": "easy",
+  "topics": ["Array", "Hash Table"],
+  "examples": [
+    {
+      "input": "[2,7,11,15], target = 9",
+      "output": "[0,1]",
+      "explanation": "Because nums[0] + nums[1] == 9, we return [0, 1]."
+    }
+  ],
+  "constraints": "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9\nOnly one valid answer exists.",
+  "test_cases": [
+    {
+      "input": {"nums": [2, 7, 11, 15], "target": 9},
+      "output": [0, 1]
+    }
+  ],
+  "images": ["https://example.com/diagram.png"],
+  "is_active": true,
+  "created_at": "2025-10-16T07:00:00Z",
+  "updated_at": "2025-10-16T07:00:00Z"
+}
+```
+
+### Question Creation Format (POST)
+```json
+{
+  "title": "Two Sum",
+  "description": "Given an array of integers nums and an integer target...",
+  "difficulty": "easy",
+  "topics": ["Array", "Hash Table"],
+  "examples": [
+    {
+      "input": "[2,7,11,15], target = 9",
+      "output": "[0,1]",
+      "explanation": "Because nums[0] + nums[1] == 9, we return [0, 1]."
+    }
+  ],
+  "constraints": "2 <= nums.length <= 10^4",
+  "test_cases": [
+    {
+      "input": {"nums": [2, 7, 11, 15], "target": 9},
+      "output": [0, 1]
+    }
+  ],
+  "images": ["https://example.com/diagram.png"],
+  "is_active": true
+}
+```
+
+### Field Descriptions
+- **`id`**: Unique identifier (auto-generated)
+- **`title`**: Question title (1-255 characters)
+- **`description`**: Question description (can be empty string)
+- **`difficulty`**: Difficulty level (`"easy"`, `"medium"`, `"hard"`)
+- **`topics`**: Array of topic strings (at least 1 required)
+- **`examples`**: Array of example objects with input, output, and explanation
+- **`constraints`**: Optional constraints text
+- **`test_cases`**: Array of test case objects for validation
+- **`images`**: Optional array of image URLs (JPEG, PNG, SVG only)
+- **`is_active`**: Boolean flag for question visibility
+- **`created_at`**: Timestamp when question was created (response only)
+- **`updated_at`**: Timestamp when question was last modified (response only)
+
 ## Development
 
 **Database Migrations:**
