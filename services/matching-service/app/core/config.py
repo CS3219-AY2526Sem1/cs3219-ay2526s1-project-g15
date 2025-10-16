@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     
     # Matching
     MATCHING_TIMEOUT_SECONDS: int = 60
+    CONFIRM_MATCH_TIMEOUT_SECONDS: int = 120
     MAX_CONCURRENT_MATCHES: int = 5000
 
     class Config:

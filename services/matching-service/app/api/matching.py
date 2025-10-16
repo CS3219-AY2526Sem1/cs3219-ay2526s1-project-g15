@@ -1,3 +1,4 @@
+from typing import Union
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -5,11 +6,15 @@ from app.core.auth import verify_token
 from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
+    MatchRequestStatusResponse,
     MatchFoundResponse,
     MatchConfirmRequest,
-    MatchConfirmedResponse
+    MatchConfirmedResponse,
+    MatchCancelledResponse
 )
 from app.services.matching_service import matching_service
+from app.models.match_request import MatchRequest, MatchStatus
+from app.models.match import Match
 from typing import Dict
 import asyncio
 
@@ -131,6 +136,7 @@ async def create_match_request(
 async def find_match_async(request_id: str, user_id: str):
     """Background task to continuously search for matches"""
     from app.core.database import SessionLocal
+    from app.core.config import settings
     
     db = SessionLocal()
     try:
@@ -156,9 +162,56 @@ async def find_match_async(request_id: str, user_id: str):
                     "topic": match.topic
                 })
                 
+                asyncio.create_task(confirm_timeout_task(match.id, settings.CONFIRM_MATCH_TIMEOUT_SECONDS))
                 break
             
             await asyncio.sleep(2)
+    finally:
+        db.close()
+
+async def confirm_timeout_task(match_id: str, timeout_seconds: int):
+    from app.core.database import SessionLocal
+    from app.models import Match, MatchRequest, MatchStatus
+    from app.utils.matching_queue import matching_queue
+
+    await asyncio.sleep(timeout_seconds)
+
+    db = SessionLocal()
+    try:
+        m = db.query(Match).filter(Match.id == match_id).first()
+        if not m:
+            return  # already cleaned up
+
+        # If not fully confirmed by now, expire & requeue both
+        if not (m.user1_confirmed and m.user2_confirmed):
+            # fetch original requests
+            r1 = db.query(MatchRequest).filter(MatchRequest.id == m.request1_id).first()
+            r2 = db.query(MatchRequest).filter(MatchRequest.id == m.request2_id).first()
+
+            for r in (r1, r2):
+                if r:
+                    r.status = MatchStatus.PENDING
+                    r.matched_at = None
+                    db.add(r)
+                    # put back into Redis queue
+                    difficulty_val = r.difficulty.value if hasattr(r.difficulty, "value") else r.difficulty
+                    matching_queue.add_to_queue(
+                        request_id=r.id,
+                        user_id=r.user_id,
+                        difficulty=difficulty_val,
+                        topic=r.topic
+                    )
+
+            # delete or mark match as expired; simplest is delete
+            db.delete(m)
+            db.commit()
+
+            # (optional) notify users over WS
+            try:
+                await manager.send_message(m.user1_id, {"type": "match_expired", "reason": "confirmation_timeout"})
+                await manager.send_message(m.user2_id, {"type": "match_expired", "reason": "confirmation_timeout"})
+            except Exception:
+                pass
     finally:
         db.close()
 
@@ -176,6 +229,30 @@ async def handle_timeout_async(request_id: str, timeout_seconds: int):
     finally:
         db.close()
 
+@router.get("/requests/{request_id}/status", response_model=MatchRequestStatusResponse)
+def get_request_status(
+    request_id: str,
+    user: dict = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    # Ensure the request exists and belongs to the caller
+    req = db.query(MatchRequest).filter(MatchRequest.id == request_id).first()
+    if not req or req.user_id != user["user_id"]:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    # Build response
+    status_str = req.status.value if hasattr(req.status, "value") else str(req.status)
+    resp = {"status": status_str}
+
+    # If matched, fetch the match_id
+    if req.status == MatchStatus.MATCHED:
+        m = db.query(Match).filter(
+            (Match.request1_id == request_id) | (Match.request2_id == request_id)
+        ).first()
+        if m:
+            resp["match_id"] = m.id
+
+    return resp
 
 @router.delete("/request/{request_id}")
 async def cancel_match_request(
@@ -191,7 +268,7 @@ async def cancel_match_request(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/confirm", response_model=MatchConfirmedResponse)
+@router.post("/confirm", response_model=Union[MatchConfirmedResponse, MatchCancelledResponse])
 async def confirm_match(
     confirmation: MatchConfirmRequest,
     user: dict = Depends(verify_token),
@@ -201,12 +278,22 @@ async def confirm_match(
     Confirm match and create collaboration session
     """
     try:
-        match = matching_service.confirm_match(
+        result = matching_service.confirm_match(
             db=db,
             match_id=confirmation.match_id,
-            user_id=user["user_id"]
+            user_id=user["user_id"],
+            confirmed=confirmation.confirmed
         )
-        
+
+        # Service returns either a Match (confirmed path) or a dict like {"cancelled": True, "match_id": "..."}
+        if isinstance(result, dict) and result.get("cancelled"):
+            return {
+                "status": "cancelled",
+                "requeued_partner": True,
+                "match_id": result["match_id"]
+            }
+
+        match = result
         # If both confirmed, return session details
         if match.user1_confirmed and match.user2_confirmed:
             # Call collaboration service and question service to set up the session
@@ -215,7 +302,7 @@ async def confirm_match(
             
             return MatchConfirmedResponse(
                 match_id=match.id,
-                collaboration_session_id=match.collaboration_session_id or "pending",
+                session_id=match.session_id or "pending",
                 question_id="TBD",  # Get from question service
                 partner_id=partner_id
             )

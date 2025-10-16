@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime
 from enum import Enum
 
@@ -23,6 +23,10 @@ class MatchRequestResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class MatchRequestStatusResponse(BaseModel):
+    status: Literal["pending","matched","cancelled","timeout"]
+    match_id: Optional[str] = None
+
 class MatchFoundResponse(BaseModel):
     match_id: str
     partner_id: str
@@ -36,6 +40,11 @@ class MatchConfirmRequest(BaseModel):
 
 class MatchConfirmedResponse(BaseModel):
     match_id: str
-    collaboration_session_id: str
+    session_id: str
     question_id: str
     partner_id: str
+
+class MatchCancelledResponse(BaseModel):
+    status: Literal["cancelled"] = "cancelled"
+    requeued_partner: bool = True
+    match_id: str

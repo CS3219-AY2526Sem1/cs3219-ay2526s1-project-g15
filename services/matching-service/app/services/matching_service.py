@@ -4,7 +4,7 @@ from app.models.match import Match
 from app.utils.matching_queue import matching_queue
 from datetime import datetime, timezone
 import uuid
-from typing import Optional
+from typing import Optional, Union
 
 class MatchingService:
     
@@ -136,12 +136,49 @@ class MatchingService:
             topic=match_request.topic
         )
     
-    def confirm_match(self, db: Session, match_id: str, user_id: str) -> Match:
+    def confirm_match(self, db: Session, match_id: str, user_id: str, confirmed: bool) -> Union[Match, dict]:
         """User confirms they want to proceed with the match"""
         match = db.query(Match).filter(Match.id == match_id).first()
         
         if not match:
             raise ValueError("Match not found")
+        if user_id not in (match.user1_id, match.user2_id):
+            raise ValueError("User not part of this match")
+
+        if confirmed is False:
+            # figure out original request and partner's request
+            if user_id == match.user1_id:
+                my_req_id, partner_req_id, partner_id = match.request1_id, match.request2_id, match.user2_id
+            else:
+                my_req_id, partner_req_id, partner_id = match.request2_id, match.request1_id, match.user1_id
+
+            my_req = db.query(MatchRequest).filter(MatchRequest.id == my_req_id).first()
+            partner_req = db.query(MatchRequest).filter(MatchRequest.id == partner_req_id).first()
+
+            # cancel match
+            if my_req and my_req.status != MatchStatus.CANCELLED:
+                my_req.status = MatchStatus.CANCELLED
+                db.add(my_req)
+
+            # requeue partner
+            if partner_req:
+                partner_req.status = MatchStatus.PENDING
+                partner_req.matched_at = None
+                db.add(partner_req)
+
+                difficulty_val = partner_req.difficulty.value if hasattr(partner_req.difficulty, "value") else partner_req.difficulty
+                matching_queue.add_to_queue(
+                    request_id=partner_req.id,
+                    user_id=partner_req.user_id,
+                    difficulty=difficulty_val,
+                    topic=partner_req.topic,
+                )
+
+            # remove the match
+            db.delete(match)
+            db.commit()
+            return {"cancelled": True, "match_id": match_id}
+
         
         # Update confirmation status
         if match.user1_id == user_id:
@@ -154,6 +191,8 @@ class MatchingService:
         # If both confirmed, create collaboration session
         if match.user1_confirmed and match.user2_confirmed:
             match.confirmed_at = datetime.now(timezone.utc)
+            collaboration_id = str(uuid.uuid4())
+            match.session_id = collaboration_id
             # Call collaboration service to create session (?)
         
         db.commit()
