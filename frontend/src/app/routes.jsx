@@ -19,7 +19,8 @@ export default function RoutesDef() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/signup/verification" element={<SignUpVerification />} />
-      <Route path="/signup/verification-successful" element={<EmailVerified />} />
+      {/* <Route path="/signup/verification-successful" element={<EmailVerified />} /> */}
+      <Route path="/verify-email" element={<EmailVerified />} />
       <Route path="/forgotpassword-verification" element={<Verification/>}/>
       <Route path="/forgotpassword-enter-email" element={<EnterEmail/>}/>
       <Route path="/forgotpassword" element={<ForgotPassword/>}/>

@@ -28,3 +28,7 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(securit
 @router.get("/me", response_model=UserOut)
 async def me(current: User = Depends(get_current_user)):
     return current
+
+@router.get("/is-admin")
+async def is_admin(current_user: User = Depends(get_current_user)):
+    return {"is_admin": current_user.role == "ADMIN"}
