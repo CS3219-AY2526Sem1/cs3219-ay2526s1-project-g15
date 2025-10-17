@@ -234,45 +234,43 @@ class RabbitMQClient:
 
         await rpc_queue.consume(rpc_handler)
 
+# EXAMPLES
+# EXCHANGES = {
+#     "user.events": MessageConfig(
+#         exchange_name="user.events",
+#         exchange_type=ExchangeType.TOPIC
+#     ),
+#     "matching.events": MessageConfig(
+#         exchange_name="matching.events",
+#         exchange_type=ExchangeType.TOPIC
+#     ),
+#     "collaboration.events": MessageConfig(
+#         exchange_name="collaboration.events",
+#         exchange_type=ExchangeType.TOPIC
+#     ),
+#     "question.events": MessageConfig(
+#         exchange_name="question.events",
+#         exchange_type=ExchangeType.TOPIC
+#     )
+# }
 
-# Predefined exchange configurations for common use cases
-EXCHANGES = {
-    "user.events": MessageConfig(
-        exchange_name="user.events",
-        exchange_type=ExchangeType.TOPIC
-    ),
-    "matching.events": MessageConfig(
-        exchange_name="matching.events",
-        exchange_type=ExchangeType.TOPIC
-    ),
-    "collaboration.events": MessageConfig(
-        exchange_name="collaboration.events",
-        exchange_type=ExchangeType.TOPIC
-    ),
-    "question.events": MessageConfig(
-        exchange_name="question.events",
-        exchange_type=ExchangeType.TOPIC
-    )
-}
+# ROUTING_KEYS = {
+#     # User service events
+#     "user.created": "user.created",
+#     "user.updated": "user.updated",
+#     "user.deleted": "user.deleted",
 
-# Common routing keys
-ROUTING_KEYS = {
-    # User service events
-    "user.created": "user.created",
-    "user.updated": "user.updated",
-    "user.deleted": "user.deleted",
+#     # Matching service events
+#     "match.requested": "match.requested",
+#     "match.found": "match.found",
+#     "match.cancelled": "match.cancelled",
 
-    # Matching service events
-    "match.requested": "match.requested",
-    "match.found": "match.found",
-    "match.cancelled": "match.cancelled",
+#     # Collaboration events
+#     "session.started": "session.started",
+#     "session.ended": "session.ended",
+#     "code.updated": "code.updated",
 
-    # Collaboration events
-    "session.started": "session.started",
-    "session.ended": "session.ended",
-    "code.updated": "code.updated",
-
-    # Question events
-    "question.assigned": "question.assigned",
-    "question.completed": "question.completed"
-}
+#     # Question events
+#     "question.assigned": "question.assigned",
+#     "question.completed": "question.completed"
+# }
