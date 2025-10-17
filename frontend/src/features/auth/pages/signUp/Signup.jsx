@@ -1,17 +1,24 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import AuthCard from "../components/AuthCard";
-import Input from "../../../shared/components/Input";
-import Button from "../../../shared/components/Button";
-import { passwordIssues } from "../utils/validators";
+import AuthCard from "../../components/AuthCard";
+import Input from "../../../../shared/components/Input";
+import Button from "../../../../shared/components/Button";
+import { passwordIssues } from "../../utils/validators";
 
 export default function Signup() {
   const [form, setForm] = useState({ username:"", email:"", password:"", confirm:"" });
   const onChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const navigate = useNavigate();
   const taken = { username: form.username === "alice", email: form.email === "alice@email.com" };
   const pwErrors = passwordIssues(form.password);
   const disabled = !form.username || !form.email || form.password !== form.confirm || pwErrors.length;
+
+  const handleSignup = () => {
+    if (disabled) return;
+    // go to "check your email" page
+    navigate(`/signup/verification`);
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -38,11 +45,13 @@ export default function Signup() {
                  onChange={onChange} error={form.confirm && form.confirm !== form.password ? "Passwords do not match." : undefined} />
 
           <Button
-            className={`w-full ${disabled ? "bg-[#4A53A7] cursor-not-allowed" : "bg-[#4A53A7] hover:bg-brand-700"} text-white font-bold text-[23px] mt-5`}
+            className={`w-full ${
+              disabled
+                ? "bg-[#4A53A7] cursor-not-allowed"
+                : "bg-[#4A53A7] hover:bg-brand-700"
+            } text-white font-bold text-[23px] mt-5`}
             disabled={disabled}
-            
-            // TODO: Sign up logic
-            onClick={() => alert("Sign up (mock)")}
+            onClick={handleSignup}
           >
             Sign Up
           </Button>
