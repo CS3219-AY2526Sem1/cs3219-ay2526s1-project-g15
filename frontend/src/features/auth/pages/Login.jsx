@@ -3,10 +3,14 @@ import { useState } from "react";
 import AuthCard from "../components/AuthCard";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
+import { login as apiLogin, me as apiMe } from "../api"; 
+import { setAccessToken } from "../../../shared/api/client";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -18,20 +22,40 @@ export default function Login() {
     return e;
   };
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     const eObj = validate();
     setErrors(eObj);
-    if (Object.keys(eObj).length === 0) {
-      // TODO: backend logic when logging in
+    setServerError("");
+    if (Object.keys(eObj).length !== 0) return;
+
+    setSubmitting(true);
+    try {
+      const data = await apiLogin({ email: form.email, password: form.password });
+      // if backend returns tokens (it does), store access token in memory client
+      if (data?.access_token) setAccessToken(data.access_token);
+
+      // optional: verify by calling /users/me (good guard + can load user into state if you have context)
+      await apiMe().catch(() => {});
+
       navigate("/home");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        "Login failed. Please check your email and password.";
+      setServerError(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <main className="min-h-screen bg-white flex items-center justify-center px-4">
       <AuthCard title="PeerPrep">
-        <h1 className="mb-5 flex items-center justify-center text-4xl font-bold text-[#262D6C]">Sign In</h1>
+        <h1 className="mb-5 flex items-center justify-center text-4xl font-bold text-[#262D6C]">
+          Sign In
+        </h1>
         <form className="space-y-4" onSubmit={onSubmit} noValidate>
           <Input
             name="email"
@@ -45,24 +69,29 @@ export default function Login() {
           <Input
             name="password"
             type="password"
-            revealable placeholder="Password"
+            revealable
+            placeholder="Password"
             value={form.password}
             onChange={onChange}
             error={errors.password}
           />
 
-         {/* TODO: forgot password logic */}
           <div className="pt-1 pb-1">
             <Link to="/forgotpassword-enter-email" className="text-[#262D6C] font-medium underline">
               Forgot Password?
             </Link>
           </div>
 
+          {serverError && (
+            <p className="text-sm text-red-600 -mt-1">{serverError}</p>
+          )}
+
           <Button
             type="submit"
             className="w-full bg-[#4A53A7] hover:opacity-95 text-white font-bold text-[23px]"
+            disabled={submitting}
           >
-            Login
+            {submitting ? "Signing in…" : "Login"}
           </Button>
         </form>
 
