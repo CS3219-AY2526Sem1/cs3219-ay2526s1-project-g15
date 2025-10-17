@@ -1,0 +1,8 @@
+{
+  "name": "user-service",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "nest start --watch"
+  }
+}

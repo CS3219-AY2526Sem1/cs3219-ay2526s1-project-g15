@@ -1,0 +1,557 @@
+<html>
+<head>
+    <title>Collaboration Test - Auto Sync</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4fc3f7;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .panel {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .panel-header {
+            background: #2d2d30;
+            padding: 12px 16px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-title {
+            font-weight: 600;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-badge.connected { background: #4caf50; color: white; }
+        .status-badge.disconnected { background: #666; color: white; }
+        .panel-body {
+            padding: 16px;
+        }
+        .connection-form {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .connection-form label {
+            font-size: 13px;
+            color: #aaa;
+        }
+        .connection-form input {
+            background: #3c3c3c;
+            border: 1px solid #555;
+            color: #d4d4d4;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .connection-form input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #4fc3f7;
+            color: #000;
+        }
+        .btn-primary:hover {
+            background: #29b6f6;
+        }
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+        .btn-secondary {
+            background: #555;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #666;
+        }
+        .editor-container {
+            position: relative;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            border-radius: 4px;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+        .editor-footer {
+            padding: 8px 16px;
+            background: #2d2d30;
+            border-top: 1px solid #3e3e42;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+        }
+        .users-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .user-badge {
+            background: #3e3e42;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .user-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+        .log {
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            background: #1e1e1e;
+            padding: 12px;
+            border-radius: 4px;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 4px;
+            border-left: 2px solid transparent;
+            padding-left: 8px;
+        }
+        .log-entry.sent { border-left-color: #4caf50; color: #81c784; }
+        .log-entry.received { border-left-color: #4fc3f7; color: #81d4fa; }
+        .log-entry.system { border-left-color: #ff9800; color: #ffb74d; }
+        .log-entry .time {
+            color: #666;
+            margin-right: 8px;
+        }
+        .info-box {
+            background: #2d2d30;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .info-box strong {
+            color: #4fc3f7;
+        }
+        .highlight {
+            background: #3e3e42;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Real-Time Collaboration Test</h1>
+        <p class="subtitle">Type in one window, see it appear automatically in the other - NO "Send" button needed!</p>
+
+        <div class="info-box">
+            <strong>📋 Instructions:</strong> Open this page in <strong>TWO browser windows</strong>, 
+            use the <span class="highlight">same Session ID</span> but 
+            <span class="highlight">different User IDs</span>, then type in either window to see automatic sync!
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">⚙️ Connection Settings</span>
+                <span id="status" class="status-badge disconnected">Disconnected</span>
+            </div>
+            <div class="panel-body">
+                <div class="connection-form">
+                    <label>Session ID:</label>
+                    <input type="text" id="sessionId" value="test-session-123">
+                    
+                    <label>User ID:</label>
+                    <input type="text" id="userId" value="user-1">
+                    
+                    <label>Username:</label>
+                    <input type="text" id="username" value="Alice">
+                </div>
+                <div class="btn-group">
+                    <button class="btn-primary" onclick="connect()">🔌 Connect</button>
+                    <button class="btn-danger" onclick="disconnect()">❌ Disconnect</button>
+                    <button class="btn-secondary" onclick="requestState()">🔄 Sync State</button>
+                </div>
+                <div style="margin-top: 12px;" id="usersContainer">
+                    <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Active Users:</div>
+                    <div class="users-list" id="usersList">
+                        <span style="color: #666; font-size: 12px;">Not connected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">💻 Code Editor (Auto-synced)</span>
+                </div>
+                <div class="panel-body" style="padding: 0;">
+                    <div class="editor-container">
+                        <textarea id="codeEditor" placeholder="# Start typing code here...
+# Changes sync automatically!
+
+def hello():
+    print('Hello from collaborative coding!')"></textarea>
+                    </div>
+                </div>
+                <div class="editor-footer">
+                    <span id="codeInfo">0 characters</span>
+                    <span id="remoteCursor" style="color: #4fc3f7;"></span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">📝 Notes (Auto-synced)</span>
+                </div>
+                <div class="panel-body" style="padding: 0;">
+                    <div class="editor-container">
+                        <textarea id="notesEditor" placeholder="# Solution approach:
+# 1. Type your notes here
+# 2. They sync automatically!
+
+"></textarea>
+                    </div>
+                </div>
+                <div class="editor-footer">
+                    <span id="notesInfo">0 characters</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">📊 Activity Log</span>
+                <button class="btn-secondary" onclick="clearLog()" style="padding: 4px 12px; font-size: 11px;">Clear</button>
+            </div>
+            <div class="panel-body">
+                <div class="log" id="log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentUserId = null;
+        let isUpdatingFromRemote = false;
+        let codeDebounceTimer = null;
+        let notesDebounceTimer = null;
+
+        // Connect to WebSocket
+        function connect() {
+            const sessionId = document.getElementById('sessionId').value;
+            const userId = document.getElementById('userId').value;
+            const username = document.getElementById('username').value;
+
+            if (!sessionId || !userId) {
+                alert('Please enter Session ID and User ID');
+                return;
+            }
+
+            currentUserId = userId;
+            const url = `ws://localhost:8003/api/v1/ws/session/${sessionId}?user_id=${userId}&username=${encodeURIComponent(username)}`;
+
+            log(`Connecting to ${sessionId}...`, 'system');
+
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                updateStatus(true);
+                log('✅ Connected successfully!', 'system');
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+
+            ws.onclose = () => {
+                updateStatus(false);
+                log('❌ Disconnected', 'system');
+            };
+
+            ws.onerror = (error) => {
+                log('❌ Connection error', 'system');
+                console.error(error);
+            };
+        }
+
+        // Disconnect
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                currentUserId = null;
+            }
+        }
+
+        // Handle incoming messages
+        function handleMessage(message) {
+            log(`📥 ${message.type}`, 'received');
+
+            switch (message.type) {
+                case 'session_state':
+                    loadSessionState(message.data);
+                    break;
+
+                case 'code_update':
+                    if (message.user_id !== currentUserId) {
+                        updateCodeFromRemote(message);
+                    }
+                    break;
+
+                case 'notes_update':
+                    if (message.user_id !== currentUserId) {
+                        updateNotesFromRemote(message);
+                    }
+                    break;
+
+                case 'cursor_move':
+                    if (message.user_id !== currentUserId) {
+                        showRemoteCursor(message);
+                    }
+                    break;
+
+                case 'user_joined':
+                    log(`👤 ${message.username} joined`, 'system');
+                    break;
+
+                case 'user_left':
+                    log(`👤 User left`, 'system');
+                    break;
+
+                case 'language_change':
+                    log(`💻 Language changed to ${message.language}`, 'system');
+                    break;
+            }
+        }
+
+        // Load initial session state
+        function loadSessionState(data) {
+            isUpdatingFromRemote = true;
+            
+            document.getElementById('codeEditor').value = data.code || '';
+            document.getElementById('notesEditor').value = data.notes || '';
+            
+            updateUsersList(data.users);
+            updateCharCounts();
+            
+            isUpdatingFromRemote = false;
+            log(`🔄 Session state loaded`, 'system');
+        }
+
+        // Update code from other user
+        function updateCodeFromRemote(message) {
+            isUpdatingFromRemote = true;
+            document.getElementById('codeEditor').value = message.code;
+            updateCharCounts();
+            isUpdatingFromRemote = false;
+        }
+
+        // Update notes from other user
+        function updateNotesFromRemote(message) {
+            isUpdatingFromRemote = true;
+            document.getElementById('notesEditor').value = message.notes;
+            updateCharCounts();
+            isUpdatingFromRemote = false;
+        }
+
+        // Show remote user's cursor
+        function showRemoteCursor(message) {
+            const cursor = message.cursor;
+            if (cursor) {
+                document.getElementById('remoteCursor').textContent = 
+                    `Other user at line ${cursor.line}, col ${cursor.column}`;
+            }
+        }
+
+        // Update users list
+        function updateUsersList(users) {
+            const list = document.getElementById('usersList');
+            if (users && users.length > 0) {
+                list.innerHTML = users.map(u => 
+                    `<div class="user-badge">
+                        <div class="user-dot"></div>
+                        ${u.username}
+                    </div>`
+                ).join('');
+            } else {
+                list.innerHTML = '<span style="color: #666;">No users</span>';
+            }
+        }
+
+        // Auto-sync code on typing (with debounce)
+        document.getElementById('codeEditor').addEventListener('input', (e) => {
+            updateCharCounts();
+            
+            if (isUpdatingFromRemote) return;
+
+            clearTimeout(codeDebounceTimer);
+            codeDebounceTimer = setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const code = e.target.value;
+                    const cursor = getCursorPosition(e.target);
+                    
+                    ws.send(JSON.stringify({
+                        type: 'code_update',
+                        code: code,
+                        cursor: cursor
+                    }));
+                    
+                    log(`📤 Code synced (${code.length} chars)`, 'sent');
+                }
+            }, 200); // 200ms debounce
+        });
+
+        // Auto-sync notes on typing (with debounce)
+        document.getElementById('notesEditor').addEventListener('input', (e) => {
+            updateCharCounts();
+            
+            if (isUpdatingFromRemote) return;
+
+            clearTimeout(notesDebounceTimer);
+            notesDebounceTimer = setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const notes = e.target.value;
+                    
+                    ws.send(JSON.stringify({
+                        type: 'notes_update',
+                        notes: notes
+                    }));
+                    
+                    log(`📤 Notes synced (${notes.length} chars)`, 'sent');
+                }
+            }, 200);
+        });
+
+        // Get cursor position
+        function getCursorPosition(textarea) {
+            const text = textarea.value.substring(0, textarea.selectionStart);
+            const lines = text.split('\n');
+            return {
+                line: lines.length,
+                column: lines[lines.length - 1].length
+            };
+        }
+
+        // Update character counts
+        function updateCharCounts() {
+            const codeLen = document.getElementById('codeEditor').value.length;
+            const notesLen = document.getElementById('notesEditor').value.length;
+            
+            document.getElementById('codeInfo').textContent = `${codeLen} characters`;
+            document.getElementById('notesInfo').textContent = `${notesLen} characters`;
+        }
+
+        // Request current state
+        function requestState() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'request_state' }));
+                log('📤 Requesting state...', 'sent');
+            } else {
+                alert('Not connected!');
+            }
+        }
+
+        // Update connection status
+        function updateStatus(connected) {
+            const badge = document.getElementById('status');
+            if (connected) {
+                badge.className = 'status-badge connected';
+                badge.textContent = 'Connected';
+            } else {
+                badge.className = 'status-badge disconnected';
+                badge.textContent = 'Disconnected';
+            }
+        }
+
+        // Log message
+        function log(message, type = 'system') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="time">[${time}]</span>${message}`;
+            
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Clear log
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Initialize
+        updateCharCounts();
+    </script>
+</body>
+</html>
