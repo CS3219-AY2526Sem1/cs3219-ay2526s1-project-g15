@@ -3,7 +3,7 @@ from email.mime.text import MIMEText
 from app.core.config import settings
 
 async def send_verification_email(email: str, token: str) -> None:
-    verify_link = f"{settings.PUBLIC_BASE_URL}/auth/verify-email?token={token}"
+    verify_link = f"{settings.PUBLIC_BASE_URL}/verify-email?token={token}"
     msg = MIMEText(f"Please verify your email by clicking the link: {verify_link}", "plain")
     msg["Subject"] = "Verify your email"
     msg["From"] = settings.MAIL_FROM

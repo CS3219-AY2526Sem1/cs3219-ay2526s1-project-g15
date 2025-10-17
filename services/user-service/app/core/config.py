@@ -6,10 +6,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "peerprep-user-service"
     ENV: str = "dev"
     HOST: str = "localhost"
-    PORT: int = 8001
+    # PORT: int = 8001 # standalone testing
+    PORT: int = 8080 # when running with API gateway
 
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@postgres:5432/peerprep_users"
+        default="postgresql+asyncpg://postgres:postgres@postgres:5433/peerprep_users"
     )
 
     SECRET_KEY: str = Field(default="dev-only-change-me")
