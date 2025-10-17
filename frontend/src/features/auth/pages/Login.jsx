@@ -3,8 +3,37 @@ import { useState } from "react";
 import AuthCard from "../components/AuthCard";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
-import { login as apiLogin, me as apiMe } from "../api"; 
+import { login as apiLogin, me as apiMe } from "../api";
 import { setAccessToken } from "../../../shared/api/client";
+
+const isValidEmail = (email) => {
+  if (!email) return false;
+  const trimmed = email.trim();
+  const pattern = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+  return pattern.test(trimmed);
+};
+
+// Normalize error into a friendly string
+const normalizeError = (err) => {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+
+  if (status === 401) return "Email or password is invalid.";
+  if (status === 403) {
+    // e.g., lockout message from backend
+    if (typeof data?.detail === "string") return data.detail;
+    return "Your account is temporarily locked. Please try again later.";
+  }
+  if (status === 422) return "Please enter a valid email address.";
+
+  if (Array.isArray(data?.detail)) {
+    return data.detail.map((e) => e.msg || String(e)).join(" ");
+  }
+  if (typeof data?.detail === "string") return data.detail;
+  if (typeof data?.message === "string") return data.message;
+
+  return "Login failed. Please try again.";
+};
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -15,9 +44,14 @@ export default function Login() {
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const emailTrimmed = form.email.trim();
+  const emailInlineErr =
+    emailTrimmed && !isValidEmail(emailTrimmed) ? "Please enter a valid email address." : undefined;
+
   const validate = () => {
     const e = {};
-    if (!form.email.trim()) e.email = "Email is required.";
+    if (!emailTrimmed) e.email = "Email is required.";
+    if (emailInlineErr) e.email = emailInlineErr;
     if (!form.password.trim()) e.password = "Password is required.";
     return e;
   };
@@ -31,20 +65,16 @@ export default function Login() {
 
     setSubmitting(true);
     try {
-      const data = await apiLogin({ email: form.email, password: form.password });
-      // if backend returns tokens (it does), store access token in memory client
+      const data = await apiLogin({
+        email: emailTrimmed.toLowerCase(), // normalize before sending
+        password: form.password,
+      });
+
       if (data?.access_token) setAccessToken(data.access_token);
-
-      // optional: verify by calling /users/me (good guard + can load user into state if you have context)
-      await apiMe().catch(() => {});
-
+      await apiMe().catch(() => {}); // optional
       navigate("/home");
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Login failed. Please check your email and password.";
-      setServerError(msg);
+      setServerError(normalizeError(err));
     } finally {
       setSubmitting(false);
     }
@@ -82,9 +112,7 @@ export default function Login() {
             </Link>
           </div>
 
-          {serverError && (
-            <p className="text-sm text-red-600 -mt-1">{serverError}</p>
-          )}
+          {serverError && <p className="text-sm text-red-600 -mt-1">{serverError}</p>}
 
           <Button
             type="submit"
