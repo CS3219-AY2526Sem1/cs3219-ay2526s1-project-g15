@@ -11,7 +11,7 @@ export default function Room() {
   const userId = searchParams.get("user_id") || crypto.randomUUID();
   const username = searchParams.get("username") || "Guest";
 
-  {/* TODO: change based on the question in backend */}
+  // TODO: change based on the question from backend
   const [code, setCode] = useState(`// Write your solution here
 function hasCycle(head){
   
@@ -20,19 +20,22 @@ function hasCycle(head){
 
   const [activeCase, setActiveCase] = useState(1);
   const [language, setLanguage] = useState("javascript");
-  
+
   const { socketReady, sessionState, sendMessage } =
     useCollaborationSocket(sessionId, userId, username);
 
-  // when we receive a session state from backend, update editor
+  // when we receive a session state from backend, update editor.
+  // depend only on `sessionState` to satisfy react-hooks/exhaustive-deps.
   useEffect(() => {
-    if (sessionState?.code !== undefined && sessionState.code !== code) {
-      setCode(sessionState.code);
+    if (!sessionState) return;
+
+    if (sessionState.code !== undefined) {
+      setCode(prev => (prev !== sessionState.code ? sessionState.code : prev));
     }
-    if (sessionState?.language && sessionState.language !== language) {
-      setLanguage(sessionState.language);
+    if (sessionState.language) {
+      setLanguage(prev => (prev !== sessionState.language ? sessionState.language : prev));
     }
-  }, [sessionState?.code, sessionState?.language]);
+  }, [sessionState]);
 
   // when user types in editor, broadcast code updates (debounced)
   useEffect(() => {
@@ -43,14 +46,14 @@ function hasCycle(head){
     }, 400);
 
     return () => clearTimeout(debounce);
-  }, [code, socketReady]);
+  }, [code, socketReady, sendMessage]);
 
-  // when user changes language
+  // when user changes language, notify collaborators
   useEffect(() => {
     if (socketReady) {
       sendMessage("language_change", { language });
     }
-  }, [language, socketReady]);
+  }, [language, socketReady, sendMessage]);
 
   // when user presses "Run" button to run code
   const runCode = (src, lang) => {
@@ -60,7 +63,6 @@ function hasCycle(head){
   const filenameByLang = (lang) =>
     ({ javascript: "index.js", typescript: "index.ts", python: "main.py",
        java: "Main.java", cpp: "main.cpp", csharp: "Program.cs" }[lang] || "main.txt");
-
 
   return (
     <div className="min-h-screen bg-[#D7D6E6] flex flex-col">
@@ -73,7 +75,7 @@ function hasCycle(head){
             </div>
 
             <section className="lg:col-span-2 rounded-2xl bg-white p-4 border shadow-inner flex flex-col">
-              {/* Connection status */}
+              {/* connection status */}
               {!socketReady && (
                 <p className="text-sm text-gray-500 mb-2">
                   Connecting to collaboration service...
@@ -84,8 +86,8 @@ function hasCycle(head){
                   Connected as <b>{username}</b>
                 </p>
               )}
-              
-              {/* Code editor with its own header bar */}
+
+              {/* code editor with its own header bar */}
               <CodeEditor
                 filename={filenameByLang(language)}
                 language={language}
@@ -93,12 +95,11 @@ function hasCycle(head){
                 value={code}
                 onChange={setCode}
                 onRun={runCode}
-                // TODO: figure out logic for avatar icon (needs to appear only when the person is online, and needs to be different colours and alphabet for different people)
-                avatarText="S"               
+                // TODO: avatar logic when presence is available
+                avatarText="S"
               />
 
-              {/* test cases */}
-              {/* TODO: change based on the question in backend */}
+              {/* test cases (placeholder — replace with backend data) */}
               <div className="mt-4 rounded-xl bg-[#111827] text-gray-100 p-4">
                 <div className="flex gap-2 mb-3">
                   {[1, 2, 3].map((n) => (

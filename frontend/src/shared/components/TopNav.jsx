@@ -1,6 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
 import Logo from "../assets/Logo.png";
-import Notification from "../assets/NotificationBell.png";
+// import Notification from "../assets/NotificationBell.png";
 import ProfilePic from "../assets/ProfilePic.png";
 import ProfileMenu from "./ProfileMenu";
 
