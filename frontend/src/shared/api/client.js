@@ -1,17 +1,18 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || "/api/v1",
-  withCredentials: false,
-  timeout: 15000,
+const ROOT = process.env.REACT_APP_API_BASE_URL || "/api/v1";
+const BASE = `${ROOT}/users`;
+
+export const api = axios.create({
+  baseURL: BASE,
+  withCredentials: false, // flip to true if you move to HttpOnly cookies later
 });
+
+// simple in-memory access token (lost on reload)
+let accessToken = null;
+export const setAccessToken = (t) => { accessToken = t; };
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
 });
-
-export default api;
