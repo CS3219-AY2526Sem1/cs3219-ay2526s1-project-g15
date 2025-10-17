@@ -1,9 +1,26 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import AuthCard from "../../components/AuthCard";
 import Button from "../../../../shared/components/Button";
+import { verifyEmail } from "../../api";
 
 export default function EmailVerified() {
+  const [params] = useSearchParams();
   const navigate = useNavigate();
+  const token = params.get("token");
+  const [status, setStatus] = useState("pending");
+
+   useEffect(() => {
+    (async () => {
+      try {
+        if (!token) throw new Error("Missing token");
+        await verifyEmail(token);
+        setStatus("ok");
+      } catch {
+        setStatus("error");
+      }
+    })();
+  }, [token]);
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
