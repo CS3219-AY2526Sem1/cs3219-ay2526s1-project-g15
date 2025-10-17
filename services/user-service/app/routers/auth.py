@@ -2,8 +2,9 @@ import asyncio, hashlib, secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, BackgroundTasks
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from app.db.session import get_session
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
@@ -16,6 +17,7 @@ from app.core.email import send_verification_email, send_reset_code_email
 from jose import JWTError, jwt
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+security = HTTPBearer()
 
 @router.post("/register", response_model=AuthOut)
 async def register(payload: RegisterIn, request: Request, db: AsyncSession = Depends(get_session)):
@@ -182,4 +184,22 @@ async def verify_email(token: str = Query(...), db: AsyncSession = Depends(get_s
         await db.commit()
 
     return {"ok": True}
+
+@router.post("/logout")
+async def logout(
+    creds: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_session),
+    ):
+    try:
+        payload = jwt.decode(creds.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=400, detail="Invalid token type")
+        user_id = payload.get("sub")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    # Delete all refresh tokens for this user (global logout)
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+    await db.commit()
+    return {"ok": True, "message": "Logged out successfully"}
     
