@@ -8,3 +8,8 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserUpdateIn(BaseModel):
+    name: str | None = None
+    new_password: str | None = None
+    old_password: str | None = None

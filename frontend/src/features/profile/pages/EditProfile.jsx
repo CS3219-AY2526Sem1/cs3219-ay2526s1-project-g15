@@ -4,7 +4,7 @@ import TopNav from "../../../shared/components/TopNav";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { passwordIssues } from "../../auth/utils/validators";
-import { me, verifyPassword } from "../../auth/api";
+import { me, verifyPassword, updateProfile } from "../../auth/api";
 
 export default function EditProfile() {
   const navigate = useNavigate();
@@ -61,22 +61,27 @@ export default function EditProfile() {
 
   const disabledSave = baseDisabled || oldPwStatus === "checking" || pwInvalid;
 
-  const onSave = (e) => {
+  const onSave = async (e) => {
     e.preventDefault();
     if (disabledSave) return;
 
     // Build payload
     const payload = {
-      username: form.username.trim(),
+      name: form.username.trim(),
       // email is immutable
       ...(wantsPwChange
-        ? { oldPassword: form.oldPassword, newPassword: form.newPassword }
+        ? { old_password: form.oldPassword, new_password: form.newPassword }
         : {}),
     };
 
-    // TODO: call backend to update profile &/or password
-    console.log("submit", payload);
-    alert("Profile saved successfully");
+    try {
+      const data = await updateProfile(payload);
+      console.log("Update profile response:", data);
+      alert("Profile updated successfully");
+      navigate("/home");
+    } catch (error) {
+      alert("Failed to update profile");
+    }
   };
 
   return (
@@ -201,7 +206,7 @@ export default function EditProfile() {
         <div className="mt-4 flex items-center justify-center gap-6">
           <Button
             as={Link}
-            to="/profile/edit"
+            to="/home"
             className="bg-[#A04747] hover:opacity-95 text-white px-8 text-xl"
           >
             Cancel

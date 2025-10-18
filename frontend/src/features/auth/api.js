@@ -47,3 +47,7 @@ export async function verifyPassword(password) {
   const { data } = await api.post("/auth/verify-password", { password });
   return data; // { ok: boolean }
 }
+
+export function updateProfile(payload) {
+  return api.put("/users/me", payload);
+}
