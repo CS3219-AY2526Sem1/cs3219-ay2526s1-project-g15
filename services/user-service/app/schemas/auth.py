@@ -25,3 +25,6 @@ class ResetPasswordIn(BaseModel):
 class VerifyCodeIn(BaseModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=12)
+
+class PasswordVerifyIn(BaseModel):
+    password: str = Field(min_length=8)

@@ -8,12 +8,13 @@ from sqlalchemy import select, delete
 from app.db.session import get_session
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
-from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn, VerifyCodeIn
+from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn, VerifyCodeIn, PasswordVerifyIn
 from app.schemas.user import UserOut
 from app.models.password_reset import PasswordReset
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, create_verification_token
 from app.core.config import settings
 from app.core.email import send_verification_email, send_reset_code_email
+from app.routers.users import get_current_user
 from jose import JWTError, jwt
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -225,4 +226,14 @@ async def logout(
     await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
     await db.commit()
     return {"ok": True, "message": "Logged out successfully"}
-    
+
+@router.post("/verify-password")
+async def verify_user_password(
+    payload: PasswordVerifyIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+    ):
+    if verify_password(payload.password, current_user.password_hash):
+        return {"ok": True}
+    else:
+        return {"ok": False}

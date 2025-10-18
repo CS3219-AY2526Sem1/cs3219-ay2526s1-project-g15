@@ -42,3 +42,8 @@ export async function isAdmin() {
   const { data } = await api.get("/users/is-admin");
   return data; // { is_admin: boolean }
 }
+
+export async function verifyPassword(password) {
+  const { data } = await api.post("/auth/verify-password", { password });
+  return data; // { ok: boolean }
+}

@@ -4,7 +4,7 @@ import TopNav from "../../../shared/components/TopNav";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { passwordIssues } from "../../auth/utils/validators";
-import { me } from "../../auth/api";
+import { me, verifyPassword } from "../../auth/api";
 
 export default function EditProfile() {
   const navigate = useNavigate();
@@ -32,17 +32,22 @@ export default function EditProfile() {
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const pwErrors = passwordIssues(form.newPassword);
 
-  // TODO: swap this mock with a real API call to Auth service
   const verifyOldPassword = async () => {
     if (!form.oldPassword) {
       setOldPwStatus("idle");
       return;
     }
     setOldPwStatus("checking");
-    // MOCK: treat "correct-old-password" as the right password
-    await new Promise((r) => setTimeout(r, 400));
-    const ok = form.oldPassword === "correct-old-password";
-    setOldPwStatus(ok ? "valid" : "invalid");
+    try {
+      const res = await verifyPassword(form.oldPassword);
+      if (res.ok) {
+        setOldPwStatus("valid");
+      } else {
+        setOldPwStatus("invalid");
+      }
+    } catch (error) {
+      setOldPwStatus("invalid");
+    }
   };
 
   const usernameTaken = form.username.trim().toLowerCase() === "deanna";
