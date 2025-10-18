@@ -1,22 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { passwordIssues } from "../../auth/utils/validators";
+import { me } from "../../auth/api";
 
 export default function EditProfile() {
   const navigate = useNavigate();
 
-  // mock initial values
-  // TODO: replace with actual user's account information from backend
   const [form, setForm] = useState({
-    username: "deanna",
-    email: "deanna@gmail.com",
+    username: "",
+    email: "",
     oldPassword: "",
     newPassword: "",
     confirm: "",
   });
+
+  useEffect(() => {
+    me().then((user) => {
+      setForm((prev) => ({
+        ...prev,
+        username: user.name || "",
+        email: user.email || "",
+      }));
+    });  
+  }, []);
 
   const [oldPwStatus, setOldPwStatus] = useState("idle"); // 'idle' | 'checking' | 'valid' | 'invalid'
 
