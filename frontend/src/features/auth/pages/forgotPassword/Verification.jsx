@@ -17,13 +17,29 @@ export default function Verification() {
     return e;
   };
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     const eObj = validate();
     setErrors(eObj);
     if (Object.keys(eObj).length === 0) {
-      // TODO: backend logic when inputting verification code
-      navigate("/forgotpassword");
+      try {
+        const email = localStorage.getItem("forgotPasswordEmail");
+        const response = await fetch("/api/v1/users/auth/verify-reset-code", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, code: form.code }),
+        });
+        const result = await response.json();
+        if (result.ok) {
+          navigate("/forgotpassword", { state: { email } });
+        } else {
+          setErrors({code: "Invalid verification code. Please try again."});
+        }
+      } catch (err) {
+        setErrors({code: "Something went wrong. Try again later."});
+      }
     }
   };
 

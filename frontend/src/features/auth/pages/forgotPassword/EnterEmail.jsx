@@ -34,7 +34,6 @@ export default function EnterEmail() {
     if (!res.ok) {
       throw new Error("Failed to submit email");
     }
-
     return { exists: true };
   }
 
@@ -59,6 +58,7 @@ export default function EnterEmail() {
       }
 
       // If email exists, show success banner first
+      localStorage.setItem("forgotPasswordEmail", form.email);
       setServerMessage("Email verified. A verification code has been sent to your email.");
       // small delay so the user can see the message
       setTimeout(() => {
