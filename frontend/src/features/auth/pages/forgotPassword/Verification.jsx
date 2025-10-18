@@ -33,6 +33,7 @@ export default function Verification() {
         });
         const result = await response.json();
         if (result.ok) {
+          localStorage.setItem("emailVerificationCode", form.code);
           navigate("/forgotpassword", { state: { email } });
         } else {
           setErrors({code: "Invalid verification code. Please try again."});
