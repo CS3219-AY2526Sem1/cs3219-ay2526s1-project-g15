@@ -23,13 +23,19 @@ export default function EnterEmail() {
     return e;
   };
 
-  // TODO: replace with real backend call
   async function verifyEmailExists(email) {
-    // Simulated latency
-    await new Promise((r) => setTimeout(r, 400));
-    // mock example: treat anything ending with "@noaccount.com" as missing
-    const exists = !email.trim().toLowerCase().endsWith("@noaccount.com");
-    return { exists };
+    const res = await fetch("/api/v1/users/auth/forgot-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to submit email");
+    }
+
+    return { exists: true };
   }
 
   const onSubmit = async (e) => {
