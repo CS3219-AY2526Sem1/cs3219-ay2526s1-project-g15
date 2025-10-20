@@ -4,7 +4,7 @@ import TopNav from "../../../shared/components/TopNav";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { passwordIssues } from "../../auth/utils/validators";
-import { me, verifyPassword, updateProfile } from "../../auth/api";
+import { me, verifyPassword, updateProfile, deleteAccount } from "../../auth/api";
 
 export default function EditProfile() {
   const navigate = useNavigate();
@@ -83,6 +83,20 @@ export default function EditProfile() {
       navigate("/home");
     } catch (error) {
       alert("Failed to update profile");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Are you sure you want to delete your account?")) {
+      return;
+    }
+    
+    try {
+      await deleteAccount();
+      alert("Account deleted successfully");
+      navigate("/");
+    } catch (error) {
+      alert("Failed to delete account");
     }
   };
 
@@ -230,15 +244,7 @@ export default function EditProfile() {
         {/* Delete Account */}
         <div className="pt-4">
           <Button
-            onClick={() => {
-              if (
-                typeof window !== "undefined" &&
-                window.confirm("Are you sure you want to delete your account?")
-              ) {
-                // TODO: delete account logic
-                navigate("/");
-              }
-            }}
+            onClick={handleDeleteAccount}
             className="w-full bg-[#A04747] hover:opacity-95 text-white text-2xl py-3"
           >
             Delete Account

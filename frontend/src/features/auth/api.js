@@ -51,3 +51,7 @@ export async function verifyPassword(password) {
 export function updateProfile(payload) {
   return api.put("/users/me", payload);
 }
+
+export function deleteAccount() {
+  return api.delete("/users/me");
+}

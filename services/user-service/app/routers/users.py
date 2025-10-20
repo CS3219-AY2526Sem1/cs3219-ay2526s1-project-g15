@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
 from app.db.session import get_session
@@ -59,3 +59,13 @@ async def update_profile(
     await db.commit()
     await db.refresh(user)
     return user
+
+@router.delete("/me")
+async def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+    ):
+    
+    await db.execute(delete(User).where(User.id == current_user.id))
+    await db.commit()
+    return {"message": "Account deleted successfully."}
