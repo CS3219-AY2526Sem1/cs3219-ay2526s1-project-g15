@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link,useNavigate } from "react-router-dom";
-import { setAccessToken, api } from "../api/client";
+import { api } from "../api/client";
 
 function useClickOutside(ref, onClose) {
   useEffect(() => {
@@ -32,7 +32,6 @@ export default function ProfileMenu({
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("forgotPasswordEmail");
       localStorage.removeItem("emailVerificationCode");
-      setAccessToken(null);
       await onLogout?.();
     } finally {
         // go back to landing page once logged out

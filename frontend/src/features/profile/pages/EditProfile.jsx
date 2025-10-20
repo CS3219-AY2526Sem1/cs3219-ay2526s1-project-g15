@@ -24,7 +24,9 @@ export default function EditProfile() {
         username: user.name || "",
         email: user.email || "",
       }));
-    });  
+    }).catch((err) => {
+      console.log("Failed to fetch user profile:", err);  
+    });
   }, []);
 
   const [oldPwStatus, setOldPwStatus] = useState("idle"); // 'idle' | 'checking' | 'valid' | 'invalid'

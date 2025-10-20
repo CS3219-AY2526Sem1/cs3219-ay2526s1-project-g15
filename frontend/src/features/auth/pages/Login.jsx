@@ -4,7 +4,6 @@ import AuthCard from "../components/AuthCard";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { login as apiLogin, me as apiMe } from "../api";
-import { setAccessToken } from "../../../shared/api/client";
 
 const isValidEmail = (email) => {
   if (!email) return false;
@@ -71,7 +70,6 @@ export default function Login() {
       });
 
       if (data?.access_token) {
-          setAccessToken(data.access_token);
           localStorage.setItem("accessToken", data.access_token);
       }
       await apiMe().catch(() => {}); // optional
