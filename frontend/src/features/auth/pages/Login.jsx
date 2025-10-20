@@ -70,7 +70,10 @@ export default function Login() {
         password: form.password,
       });
 
-      if (data?.access_token) setAccessToken(data.access_token);
+      if (data?.access_token) {
+          setAccessToken(data.access_token);
+          localStorage.setItem("accessToken", data.access_token);
+      }
       await apiMe().catch(() => {}); // optional
       navigate("/home");
     } catch (err) {

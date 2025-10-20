@@ -11,6 +11,7 @@ import Home from "../features/home/pages/Home";
 import History from "../features/session/pages/History";
 import Room from "../features/session/pages/Room";
 import EditProfile from "../features/profile/pages/EditProfile";
+import ProtectedRoute from "../shared/ProtectedRoute";
 
 export default function RoutesDef() {
   return (
@@ -19,16 +20,19 @@ export default function RoutesDef() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/signup/verification" element={<SignUpVerification />} />
-      {/* <Route path="/signup/verification-successful" element={<EmailVerified />} /> */}
       <Route path="/verify-email" element={<EmailVerified />} />
-      <Route path="/forgotpassword-verification" element={<Verification/>}/>
-      <Route path="/forgotpassword-enter-email" element={<EnterEmail/>}/>
-      <Route path="/forgotpassword" element={<ForgotPassword/>}/>
-      <Route path="/home" element={<Home />} />
-      <Route path="/history" element={<History />} />
-      <Route path="/session/active/:sessionId" element={<Room />} />
-      <Route path="/profile/edit" element={<EditProfile />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/forgotpassword-verification" element={<Verification />} />
+      <Route path="/forgotpassword-enter-email" element={<EnterEmail />} />
+      <Route path="/forgotpassword" element={<ForgotPassword />} />
+
+      {/* Protected Routes */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/home" element={<Home />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/session/active/:sessionId" element={<Room />} />
+        <Route path="/profile/edit" element={<EditProfile />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
   );
 }

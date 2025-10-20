@@ -27,13 +27,13 @@ export default function ProfileMenu({
    const handleLogout = async () => {
     setOpen(false);
     try {
-      await onLogout?.();
       await api.post("/auth/logout");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("forgotPasswordEmail");
       localStorage.removeItem("emailVerificationCode");
       setAccessToken(null);
+      await onLogout?.();
     } finally {
         // go back to landing page once logged out
       navigate("/"); 
