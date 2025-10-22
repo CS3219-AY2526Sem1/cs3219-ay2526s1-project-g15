@@ -1,16 +1,16 @@
-import { api, setAccessToken } from "../../shared/api/client";
+import { api } from "../../shared/api/client";
 
 // POST /auth/register
 export async function register(payload) {
   const { data } = await api.post("/auth/register", payload);
-  if (data && data.access_token) setAccessToken(data.access_token);
+  if (data && data.access_token) localStorage.setItem("accessToken", data.access_token);
   return data;
 }
 
 // POST /auth/login
 export async function login(payload) {
   const { data } = await api.post("/auth/login", payload);
-  if (data && data.access_token) setAccessToken(data.access_token);
+  if (data && data.access_token) localStorage.setItem("accessToken", data.access_token);
   return data;
 }
 
@@ -41,4 +41,17 @@ export async function me() {
 export async function isAdmin() {
   const { data } = await api.get("/users/is-admin");
   return data; // { is_admin: boolean }
+}
+
+export async function verifyPassword(password) {
+  const { data } = await api.post("/auth/verify-password", { password });
+  return data; // { ok: boolean }
+}
+
+export function updateProfile(payload) {
+  return api.put("/users/me", payload);
+}
+
+export function deleteAccount() {
+  return api.delete("/users/me");
 }

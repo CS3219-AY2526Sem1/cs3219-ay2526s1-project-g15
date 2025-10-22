@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link,useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 
 function useClickOutside(ref, onClose) {
   useEffect(() => {
@@ -26,7 +27,11 @@ export default function ProfileMenu({
    const handleLogout = async () => {
     setOpen(false);
     try {
-      // TODO: clear any client-side session stuff like removing token from local storage once backend is set up
+      await api.post("/auth/logout");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("forgotPasswordEmail");
+      localStorage.removeItem("emailVerificationCode");
       await onLogout?.();
     } finally {
         // go back to landing page once logged out

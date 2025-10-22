@@ -8,11 +8,8 @@ export const api = axios.create({
   withCredentials: false, // flip to true if you move to HttpOnly cookies later
 });
 
-// simple in-memory access token (lost on reload)
-let accessToken = null;
-export const setAccessToken = (t) => { accessToken = t; };
-
 api.interceptors.request.use((config) => {
+  const accessToken = localStorage.getItem("accessToken");
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
 });
