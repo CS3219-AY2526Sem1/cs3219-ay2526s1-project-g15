@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import ProblemPanel from "../components/ProblemPanel";
 import CodeEditor from "../../../shared/components/CodeEditor";
@@ -103,6 +103,7 @@ class Builders {
 
 
 export default function Room() {
+  const navigate = useNavigate();
   const { sessionId } = useParams();
   const [searchParams] = useSearchParams();
   const userId = searchParams.get("user_id") || crypto.randomUUID();
@@ -130,6 +131,12 @@ function hasCycle(head){
   // for user's outputs
   const [caseOutputs, setCaseOutputs] = useState({});
 
+  // for submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitBanner, setSubmitBanner] = useState(""); 
+  
+  // for user to leave meeting 
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const { socketReady, sessionState, sendMessage } =
     useCollaborationSocket(sessionId, userId, username);
@@ -249,6 +256,38 @@ function hasCycle(head){
     return outByCase;
   }
 
+  const submitSolution = async (src, lang) => {
+    setIsSubmitting(true);
+    setSubmitBanner("Submitting solution...");  // TODO: navigate to a page that shows whether their solution is accepted once they submit 
+    /* try {
+      // TODO: update api based on what haihui has done
+      const base = import.meta.env.VITE_API_GATEWAY_URL || "";
+      const res = await fetch(`${base}/api/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          userId,
+          username,
+          language: lang,
+          source: src,
+          problem: { id: "141", slug: "linked-list-cycle" }, // MOCK
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+
+      setSubmitBanner("Solution submitted successfully!");
+      setTimeout(() => setSubmitBanner(""), 2500); // auto-hide after 2.5s
+    } catch (e) {
+      setSubmitBanner(`Submission failed: ${e.message}`);
+      setTimeout(() => setSubmitBanner(""), 3000);
+    } finally {
+      setIsSubmitting(false);
+    }*/
+  };
+
 
   const filenameByLang = (lang) =>
     ({ javascript: "index.js", typescript: "index.ts", python: "main.py",
@@ -265,6 +304,14 @@ function hasCycle(head){
             </div>
 
             <section className="lg:col-span-2 rounded-2xl bg-white p-4 border shadow-inner flex flex-col">
+              {/* submission banner */}
+              {submitBanner && (
+                <div className="mb-3 w-full rounded-md bg-indigo-100 text-indigo-700 px-3 py-2 text-sm font-medium border border-indigo-300 transition-all">
+                  {submitBanner}
+                </div>
+              )}
+
+              <div className="relative mb-2">
               {/* connection status */}
               {!socketReady && (
                 <p className="text-sm text-gray-500 mb-2">
@@ -276,6 +323,39 @@ function hasCycle(head){
                   Connected as <b>{username}</b>
                 </p>
               )}
+              
+
+              <button
+                onClick={() => setShowLeaveConfirm(true)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1 rounded-md text-sm font-medium text-white bg-red-700 hover:bg-red-800 transition"
+              >
+                End Session
+              </button>
+              </div>
+
+              {showLeaveConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl shadow-xl p-6 w-80 text-center">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                      Are you sure you want to end the session?
+                    </h3>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => navigate("/home")}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                      >
+                        Yes, End
+                      </button>
+                      <button
+                        onClick={() => setShowLeaveConfirm(false)}
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* code editor with its own header bar */}
               <CodeEditor
@@ -285,7 +365,8 @@ function hasCycle(head){
                 value={code}
                 onChange={setCode}
                 onRun={runCode}
-                // TODO: avatar logic when presence is available
+                onSubmit={submitSolution}  
+                // TODO: avatar logic 
                 avatarText="S"
               />
 
