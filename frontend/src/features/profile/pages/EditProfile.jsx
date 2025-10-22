@@ -134,13 +134,13 @@ export default function EditProfile() {
 
         {/* Password */}
         <section>
-          <p className="mb-2 text-gray-700">Old password</p>
+          <p className="mb-2 text-gray-700">Change password</p>
 
           <Input
             name="oldPassword"
             type="password"
             revealable
-            placeholder="Old password"
+            placeholder="Please input your old password"
             value={form.oldPassword}
             onChange={(e) => {
               onChange(e);
