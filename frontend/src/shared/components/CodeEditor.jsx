@@ -6,13 +6,9 @@ const LABELS = {
   typescript: "TypeScript",
   python: "Python",
   java: "Java",
-  cpp: "C++",
-  csharp: "C#",
 };
 
 function langBadge(lang) {
-  if (lang === "csharp") return "C#";
-  if (lang === "cpp") return "C++";
   return (lang?.slice(0, 2) || "js").toUpperCase();
 }
 
@@ -22,7 +18,7 @@ export default function CodeEditor({
   onChange,
   language = "javascript",
   onLanguageChange,
-  languages = ["javascript", "typescript", "python", "java", "cpp", "csharp"],
+  languages = ["javascript", "typescript", "python", "java"],
   filename = "index.js",
   height = "520px",
   onRun,            
