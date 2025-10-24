@@ -18,9 +18,11 @@ class Settings(BaseSettings):
     )
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
 
-    # JWT
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
+    # Authentication
+    AUTH_ALGORITHM: str = "HS256"
+    AUTH_ACCESS_SECRET: str = Field(..., description="Same as User Service SECRET_KEY")
+    AUTH_ISSUER: str | None = None
+    AUTH_AUDIENCE: str | None = None
     
     # Matching
     MATCHING_TIMEOUT_SECONDS: int = 60

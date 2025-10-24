@@ -1,4 +1,8 @@
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt, ExpiredSignatureError
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.models.match_request import MatchRequest, MatchStatus, DifficultyLevel
 from app.models.match import Match
 from app.utils.matching_queue import matching_queue
@@ -8,6 +12,37 @@ from typing import Optional, Union
 
 class MatchingService:
     
+    bearer = HTTPBearer(auto_error=True)
+
+    def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
+        token = creds.credentials
+        try:
+            claims = jwt.decode(
+                token,
+                settings.AUTH_ACCESS_SECRET, # shared secret from user-service
+                algorithms=[settings.AUTH_ALGORITHM],
+                issuer=settings.AUTH_ISSUER,
+                options={
+                    "verify_aud": bool(settings.AUTH_AUDIENCE), # stays False if not set
+                },
+                audience=settings.AUTH_AUDIENCE, # None by default
+            )
+        except ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+        # Must be an access token, not refresh
+        if claims.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Wrong token type")
+
+        # Pull the user id from 'sub'
+        user_id = claims.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Token missing user id")
+
+        return {"user_id": user_id, "claims": claims}
+
     def create_match_request(
         self, 
         db: Session, 

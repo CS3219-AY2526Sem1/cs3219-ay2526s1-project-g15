@@ -1,8 +1,10 @@
 from typing import Union
+from jose import jwt, JWTError, ExpiredSignatureError
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
+from app.core.config import settings
 from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
@@ -317,34 +319,56 @@ async def confirm_match(
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    token: str
-):
+async def websocket_endpoint(websocket: WebSocket, token: str):
     """
-    WebSocket endpoint for real-time matching updates
+    WebSocket endpoint for real-time matching updates.
+    Expects a JWT access token in the query string: /ws?token=<ACCESS_TOKEN>
     """
-    # Verify token (you'll need to implement this for WebSocket)
-    # For now, assuming token is passed as query param
-    
+    user_id = None
     try:
-        # Extract user_id from token
-        from jose import jwt
-        from app.core.config import settings
-        
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        user_id = payload.get("user_id")
-        
+        # Decode with the *User Service* secret & settings
+        claims = jwt.decode(
+            token,
+            settings.AUTH_ACCESS_SECRET, # SAME value as user-service SECRET_KEY
+            algorithms=[settings.AUTH_ALGORITHM],
+            issuer=settings.AUTH_ISSUER,
+            options={"verify_aud": bool(settings.AUTH_AUDIENCE)},
+            audience=settings.AUTH_AUDIENCE,
+        )
+
+        # Must be an access token
+        if claims.get("type") != "access":
+            await websocket.close(code=4401)
+            return
+
+        # Get the canonical user id
+        user_id = claims.get("sub")
+        if not user_id:
+            await websocket.close(code=4401)
+            return
+
+        # Accept the socket and register it
         await manager.connect(user_id, websocket)
-        
-        # Keep connection alive
+
+        # Keep alive / receive client messages if you need them
         while True:
-            data = await websocket.receive_json()
-            # Handle any client messages if needed
-            
+            _ = await websocket.receive_json()
+
+    except (ExpiredSignatureError, JWTError):
+        # token invalid/expired
+        try:
+            await websocket.close(code=4401)
+        finally:
+            if user_id:
+                manager.disconnect(user_id)
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
         if user_id:
             manager.disconnect(user_id)
+    except Exception as e:
+        # log the error if you wish
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011)
+        finally:
+            if user_id:
+                manager.disconnect(user_id)
