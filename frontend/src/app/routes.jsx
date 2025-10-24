@@ -12,6 +12,10 @@ import History from "../features/session/pages/History";
 import Room from "../features/session/pages/Room";
 import EditProfile from "../features/profile/pages/EditProfile";
 import ProtectedRoute from "../shared/ProtectedRoute";
+import AdminRoute from "../shared/AdminRoute";
+import AdminHome from "../features/admin/pages/AdminHome";
+import AddQuestion from "../features/admin/pages/AddQuestion";
+import EditQuestion from "../features/admin/pages/EditQuestion";
 
 export default function RoutesDef() {
   return (
@@ -31,6 +35,14 @@ export default function RoutesDef() {
         <Route path="/history" element={<History />} />
         <Route path="/session/active/:sessionId" element={<Room />} />
         <Route path="/profile/edit" element={<EditProfile />} />
+        
+        {/* Admin-only Routes  */}
+        <Route element={<AdminRoute />}>
+          <Route path="/admin/home" element={<AdminHome />} />
+          <Route path="/admin/add-questions" element={<AddQuestion />} />
+          <Route path="/admin/questions/:id/edit" element={<EditQuestion />} />
+        </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

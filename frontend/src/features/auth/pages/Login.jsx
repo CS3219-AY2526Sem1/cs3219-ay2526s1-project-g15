@@ -3,7 +3,7 @@ import { useState } from "react";
 import AuthCard from "../components/AuthCard";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
-import { login as apiLogin, me as apiMe } from "../api";
+import { login as apiLogin, me as apiMe, isAdmin as apiIsAdmin } from "../api";
 
 const isValidEmail = (email) => {
   if (!email) return false;
@@ -12,7 +12,7 @@ const isValidEmail = (email) => {
   return pattern.test(trimmed);
 };
 
-// Normalize error into a friendly string
+// normalize error into a user-friendly string
 const normalizeError = (err) => {
   const status = err?.response?.status;
   const data = err?.response?.data;
@@ -44,8 +44,7 @@ export default function Login() {
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const emailTrimmed = form.email.trim();
-  const emailInlineErr =
-    emailTrimmed && !isValidEmail(emailTrimmed) ? "Please enter a valid email address." : undefined;
+  const emailInlineErr = emailTrimmed && !isValidEmail(emailTrimmed) ? "Please enter a valid email address." : undefined;
 
   const validate = () => {
     const e = {};
@@ -64,16 +63,32 @@ export default function Login() {
 
     setSubmitting(true);
     try {
+      // login
       const data = await apiLogin({
-        email: emailTrimmed.toLowerCase(), // normalize before sending
+        email: emailTrimmed.toLowerCase(),
         password: form.password,
       });
 
+      // get access token
       if (data?.access_token) {
-          localStorage.setItem("accessToken", data.access_token);
+        localStorage.setItem("accessToken", data.access_token);
+      } else {
+        throw new Error("No access token returned from login.");
       }
-      await apiMe().catch(() => {}); // optional
-      navigate("/home");
+
+      await apiMe().catch(() => {});
+
+      // check if user is admin
+      try {
+        const adminData = await apiIsAdmin();
+        
+        // redirect user based on role of user
+        navigate(adminData?.is_admin ? "/admin/home" : "/home");
+      } catch (adminCheckError) {
+        // If admin check fails, default to regular home
+        console.error("Failed to check admin status:", adminCheckError);
+        navigate("/home");
+      }
     } catch (err) {
       setServerError(normalizeError(err));
     } finally {
@@ -125,7 +140,7 @@ export default function Login() {
         </form>
 
         <p className="text-center text-black mt-4">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <Link to="/signup" className="text-[#262D6C] hover:underline font-semibold">
             Create one
           </Link>
