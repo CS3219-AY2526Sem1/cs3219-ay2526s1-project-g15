@@ -80,16 +80,15 @@ python scripts/database_architecture_setup.py
 **Base URL:** `http://localhost:8003`
 
 ### Question Management
-- `GET /api/v1/questions/` - List questions (minimal format for performance)
-- `GET /api/v1/questions/{id}` - Get specific question (full details)
-- `GET /api/v1/questions/{id}/preview` - Preview question (user view)
+- `GET /api/v1/questions/` - List questions (minimal format)
+- `GET /api/v1/questions/{id}` - Get specific question with full details
 - `POST /api/v1/questions/` - Create question (Admin only)
 - `PUT /api/v1/questions/{id}` - Update question (Admin only)
 - `DELETE /api/v1/questions/{id}` - Delete question (Admin only)
 - `PUT /api/v1/questions/{id}/toggle-status` - Enable/disable question (Admin only)
 
 ### Advanced Filtering
-- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format for performance)
+- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format)
   - Query Parameters:
     - `topics` (optional): Array of topic strings (e.g., `topics=Array&topics=Hash Table`)
     - `difficulty` (optional): Difficulty level (`easy`, `medium`, `hard`)
