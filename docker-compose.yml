@@ -1,0 +1,56 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gateway/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+    depends_on:
+      - user-service
+    networks: [appnet]
+
+  user-service:
+    build: ./services/user-service
+    container_name: user-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8001
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/peerprep_users
+      - SECRET=secretkey
+      - ALGORITHM=HS256
+      - ACCESS_TTL_MIN=15
+      - REFRESH_TTL_DAYS=7
+    expose:
+      - "8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [appnet]
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=peerprep_users
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-peerprep_users}"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [appnet]
+
+volumes:
+  pgdata:
+
+networks:
+  appnet:
+    driver: bridge

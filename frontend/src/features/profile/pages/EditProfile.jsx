@@ -1,39 +1,55 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import Input from "../../../shared/components/Input";
 import Button from "../../../shared/components/Button";
 import { passwordIssues } from "../../auth/utils/validators";
+import { me, verifyPassword, updateProfile, deleteAccount } from "../../auth/api";
 
 export default function EditProfile() {
   const navigate = useNavigate();
 
-  // mock initial values
-  // TODO: replace with actual user's account information from backend
   const [form, setForm] = useState({
-    username: "deanna",
-    email: "deanna@gmail.com",
+    username: "",
+    email: "",
     oldPassword: "",
     newPassword: "",
     confirm: "",
   });
+
+  useEffect(() => {
+    me().then((user) => {
+      setForm((prev) => ({
+        ...prev,
+        username: user.name || "",
+        email: user.email || "",
+      }));
+    }).catch((err) => {
+      console.log("Failed to fetch user profile:", err);  
+    });
+  }, []);
 
   const [oldPwStatus, setOldPwStatus] = useState("idle"); // 'idle' | 'checking' | 'valid' | 'invalid'
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const pwErrors = passwordIssues(form.newPassword);
 
-  // TODO: swap this mock with a real API call to Auth service
   const verifyOldPassword = async () => {
     if (!form.oldPassword) {
       setOldPwStatus("idle");
       return;
     }
     setOldPwStatus("checking");
-    // MOCK: treat "correct-old-password" as the right password
-    await new Promise((r) => setTimeout(r, 400));
-    const ok = form.oldPassword === "correct-old-password";
-    setOldPwStatus(ok ? "valid" : "invalid");
+    try {
+      const res = await verifyPassword(form.oldPassword);
+      if (res.ok) {
+        setOldPwStatus("valid");
+      } else {
+        setOldPwStatus("invalid");
+      }
+    } catch (error) {
+      setOldPwStatus("invalid");
+    }
   };
 
   const usernameTaken = form.username.trim().toLowerCase() === "deanna";
@@ -47,22 +63,41 @@ export default function EditProfile() {
 
   const disabledSave = baseDisabled || oldPwStatus === "checking" || pwInvalid;
 
-  const onSave = (e) => {
+  const onSave = async (e) => {
     e.preventDefault();
     if (disabledSave) return;
 
     // Build payload
     const payload = {
-      username: form.username.trim(),
+      name: form.username.trim(),
       // email is immutable
       ...(wantsPwChange
-        ? { oldPassword: form.oldPassword, newPassword: form.newPassword }
+        ? { old_password: form.oldPassword, new_password: form.newPassword }
         : {}),
     };
 
-    // TODO: call backend to update profile &/or password
-    console.log("submit", payload);
-    alert("Profile saved successfully");
+    try {
+      const data = await updateProfile(payload);
+      console.log("Update profile response:", data);
+      alert("Profile updated successfully");
+      navigate("/home");
+    } catch (error) {
+      alert("Failed to update profile");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Are you sure you want to delete your account?")) {
+      return;
+    }
+    
+    try {
+      await deleteAccount();
+      alert("Account deleted successfully");
+      navigate("/");
+    } catch (error) {
+      alert("Failed to delete account");
+    }
   };
 
   return (
@@ -99,13 +134,13 @@ export default function EditProfile() {
 
         {/* Password */}
         <section>
-          <p className="mb-2 text-gray-700">Old password</p>
+          <p className="mb-2 text-gray-700">Change password</p>
 
           <Input
             name="oldPassword"
             type="password"
             revealable
-            placeholder="Old password"
+            placeholder="Please input your old password"
             value={form.oldPassword}
             onChange={(e) => {
               onChange(e);
@@ -187,7 +222,7 @@ export default function EditProfile() {
         <div className="mt-4 flex items-center justify-center gap-6">
           <Button
             as={Link}
-            to="/profile/edit"
+            to="/home"
             className="bg-[#A04747] hover:opacity-95 text-white px-8 text-xl"
           >
             Cancel
@@ -209,15 +244,7 @@ export default function EditProfile() {
         {/* Delete Account */}
         <div className="pt-4">
           <Button
-            onClick={() => {
-              if (
-                typeof window !== "undefined" &&
-                window.confirm("Are you sure you want to delete your account?")
-              ) {
-                // TODO: delete account logic
-                navigate("/");
-              }
-            }}
+            onClick={handleDeleteAccount}
             className="w-full bg-[#A04747] hover:opacity-95 text-white text-2xl py-3"
           >
             Delete Account

@@ -107,7 +107,7 @@ async def broadcast_to_session(
                 session.remove_user(user_id)
 
 
-@router.websocket("/ws/session/{session_id}")
+@router.websocket("/ws/session/active/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: str,
@@ -197,7 +197,7 @@ async def websocket_endpoint(
         
         # Clean up empty sessions
         if session.is_empty():
-            print(f"🗑️ Session {session_id} empty, cleaning up")
+            print(f"Session {session_id} empty, cleaning up")
             # TODO: Save to database before deleting
             del active_sessions[session_id]
     

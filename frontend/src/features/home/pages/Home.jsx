@@ -5,6 +5,8 @@ import OngoingMeetingCard from "../components/OngoingMeetingCard";
 import DifficultyPicker from "../components/DifficultyPicker";
 import TopicSelect from "../components/TopicSelect";
 
+const COMPLETED_TOPICS = ["Arrays", "Graphs"];
+
 export default function Home() {
   // toggle to demo the sidebar
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
@@ -16,7 +18,7 @@ export default function Home() {
     () => ["Arrays", "Strings", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Math"],
     []
   );
-  const completedTopics = ["Arrays", "Graphs"]; 
+  const completedTopics = COMPLETED_TOPICS;
 
   const firstAvailableTopic = useMemo(
     () => topics.find((t) => !completedTopics.includes(t)) || "",
@@ -39,7 +41,7 @@ export default function Home() {
   };
 
   const [status, setStatus] = useState("idle");
-  const timer = useRef(null);
+  // const timer = useRef(null);
 
   // timout: after 60s
   const SEARCH_TIMEOUT_MS = 60_000;
@@ -92,7 +94,13 @@ export default function Home() {
     // stop timers
     clearTimeout(timeoutRef?.current);
     clearInterval(pollRef?.current);
-    navigate("/session/active");
+    
+    // temporary session and user details (replaced with response from matching service)
+    const tempSessionId = "session123";
+    const tempUserId = "demoUser1";
+    const tempUsername = "DemoUser";
+
+    navigate(`/session/active/${tempSessionId}?user_id=${tempUserId}&username=${tempUsername}`);
   };
 
   const retry = () => startSearch();
