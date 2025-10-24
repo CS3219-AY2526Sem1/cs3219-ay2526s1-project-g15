@@ -43,9 +43,9 @@ def get_questions(
 
     filters = QuestionFilter(difficulty=difficulty, topics=topics, search=search)
     questions, total = QuestionService.get_questions(
-        db=db, 
-        skip=skip, 
-        limit=per_page, 
+        db=db,
+        skip=skip,
+        limit=per_page,
         filters=filters,
         include_inactive=auth_context["is_admin"]  # Admins can see inactive questions
     )
@@ -74,14 +74,14 @@ def get_question(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found"
         )
-    
+
     # Non-admins can only see active questions
     if not auth_context["is_admin"] and not question.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found"  # Don't reveal that inactive questions exist
         )
-    
+
     return question
 
 
@@ -140,30 +140,6 @@ def toggle_question_status(
     )
 
     return updated_question
-
-
-@router.get("/{question_id}/preview", response_model=QuestionResponse)
-def preview_question(
-    question_id: int,
-    db: Session = Depends(get_db),
-    auth_context: dict = Depends(get_question_filter_context)
-):
-    """Preview question as end-users will see it (only shows active questions to non-admins)"""
-    question = QuestionService.get_question(db=db, question_id=question_id)
-    if not question:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found"
-        )
-    
-    # Non-admins can only preview active questions
-    if not auth_context["is_admin"] and not question.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found"
-        )
-    
-    return question
 
 
 @router.get("/filter/topics-difficulty", response_model=List[QuestionMinimal])
