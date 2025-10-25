@@ -35,7 +35,7 @@ export default function AdminHome() {
 
   useEffect(() => {
     loadQuestions();
-  }, [loadQuestions]);
+  }, []);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -53,10 +53,12 @@ export default function AdminHome() {
   const onDelete = async (item) => {
     if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
     try {
-      await questionService.deleteQuestion(item.id);
-      setItems(prev => prev.filter(x => x.id !== item.id));
+        await questionService.deleteQuestion(item.id);
+        // Reload the entire list from server
+        await loadQuestions();
     } catch (e) {
-      alert("Failed to delete question");
+        console.error("Delete error:", e);
+        alert(`Failed to delete question: ${e.message}`);
     }
   };
 

@@ -16,6 +16,7 @@ import AdminRoute from "../shared/AdminRoute";
 import AdminHome from "../features/admin/pages/AdminHome";
 import AddQuestion from "../features/admin/pages/AddQuestion";
 import EditQuestion from "../features/admin/pages/EditQuestion";
+import AdminQuestionView from "../features/admin/pages/AdminQuestionView";
 
 export default function RoutesDef() {
   return (
@@ -39,6 +40,7 @@ export default function RoutesDef() {
         {/* Admin-only Routes  */}
         <Route element={<AdminRoute />}>
           <Route path="/admin/home" element={<AdminHome />} />
+          <Route path="/admin/questions/:id" element={<AdminQuestionView />} />
           <Route path="/admin/add-questions" element={<AddQuestion />} />
           <Route path="/admin/questions/:id/edit" element={<EditQuestion />} />
         </Route>

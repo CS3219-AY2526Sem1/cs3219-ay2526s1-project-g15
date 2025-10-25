@@ -72,7 +72,17 @@ export const questionService = {
   },
 
   async deleteQuestion(id) {
-    return fetchJson(`${API_BASE}${id}`, { method: 'DELETE', headers: authHeaders() });
+    const res = await fetch(`${API_BASE}${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    
+    if (!res.ok) {
+        throw new Error(`Failed to delete question: ${res.status} ${res.statusText}`);
+    }
+    
+    // 204 No Content has no body to parse
+    return { success: true };
   },
 
   async toggleStatus(id) {
