@@ -80,9 +80,16 @@ python scripts/continuous_fetch.py
 - Monitor with: `SELECT pg_size_pretty(pg_database_size(current_database()));`
 
 ### Duplicate Handling
+- **Detects duplicates by title only**
+- Checks if a question with the same exact title exists in database
 - Automatically skips questions already in database
 - Safe to restart script multiple times
-- Won't create duplicates
+- Won't create duplicates if titles match exactly
+
+**Important Notes:**
+- If an admin manually adds a question with a different title than LeetCode (e.g., "Two Sum Problem" vs "Two Sum"), the script will treat them as separate questions
+- If titles match exactly, the script will skip the LeetCode version
+- This allows admins to add custom questions without conflicts
 
 ### Error Handling
 - Retries failed fetches 3 times
