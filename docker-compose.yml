@@ -72,6 +72,26 @@ services:
         condition: service_started
     networks: [appnet]
 
+  collaboration-service:
+    build: ./services/collaboration-service
+    container_name: collaboration-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8004
+      - DATABASE_URL=postgresql+asyncpg://collaboration_user:collabpass@postgres:5432/peerprep_collaboration
+      - REDIS_URL=redis://redis:6379/0
+      - USER_SERVICE_URL=http://user-service:8001
+    expose:
+      - "8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [appnet]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
+
   postgres:
     image: postgres:16
     container_name: postgres
@@ -96,6 +116,7 @@ services:
     ports:
       - "6380:6379"
     networks: [appnet]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
