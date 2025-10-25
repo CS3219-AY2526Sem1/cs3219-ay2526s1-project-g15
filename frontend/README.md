@@ -1,70 +1,160 @@
-# Getting Started with Create React App
+# PeerPrep Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+The PeerPrep Frontend is a React-based web application that provides the user interface for the PeerPrep platform — a collaborative coding interview preparation tool. It features authentication, real-time peer matching, collaborative code editing and comprises of a comprehensive list of interview questions for users to practice with.
+
+## Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Framework | React 18+ |
+| Routing | React Router DOM |
+| Styling | Tailwind CSS |
+| Components | Custom UI + Shadcn/UI |
+| Code Editor | Monaco Editor |
+| API Calls | Fetch API via `shared/api` utilities |
+| Containerisation | Docker |
+| Reverse Proxy | Nginx (configured via base repository) |
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── app/               # Core app structure and routes
+│   ├── features/          # Feature-based modules
+│   │   ├── admin/         # Admin dashboard & question management
+│   │   ├── auth/          # Login, register, email verification
+│   │   ├── home/          # Home page 
+│   │   ├── profile/       # Edit Profile page 
+│   │   ├── session/       # Collaboration session/room 
+│   ├── shared/            # Reusable components and utilities     
+├── index.css              # Global CSS + Tailwind imports
+├── index.js               # React entry point
+├── Dockerfile             # Container setup for Nginx serving build
+├── nginx.conf             # Gateway proxy config
+├── package.json
+├── README.md
+└── tailwind.config.js
+```
+
+## Environment Variables
+
+Create a `.env` file in the `frontend/` directory:
+
+```env
+# API Configuration
+REACT_APP_API_BASE=/api/v1
+```
+
+> **Note:** In production, all `/api/v1/...` requests are automatically proxied through Nginx to their respective backend services.
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js 16+ and npm
+- Docker (for containerized deployment)
+
+### 1. Install Dependencies
+
+```bash
+cd frontend
+npm install
+```
+
+### 2. Start Development Server
+
+```bash
+npm start
+```
+
+This runs the frontend on `http://localhost:3000` by default.
+
+### 3. Build for Production
+
+```bash
+npm run build
+```
+
+This generates the optimized production build in the `/build` folder, which is then served by Nginx when running via Docker.
+
+## Docker Setup
+
+The frontend is fully containerized and integrated with the main project's `docker-compose.yml`.
+
+### Build and Run
+
+```bash
+# From the base repository
+docker compose build
+docker compose up
+```
+
+This will:
+- Build the React app (`npm run build`)
+- Serve the built app through Nginx
+- Proxy API requests to the appropriate microservices:
+  - `/api/v1/users/` → User Service
+  - `/api/v1/questions/` → Question Service
+  - `/api/v1/matching/` → Matching Service
+
+## Key Features
+
+### Authentication
+- User login and registration
+- Email verification
+- Password reset functionality
+- Role-based access control (User / Admin)
+
+### Matching & Collaboration
+- Real-time peer matching via matching service
+- Integrated collaborative code editor powered by Monaco
+- Live code synchronization between matched peers
+
+### Question Management (Admin)
+- Add, edit, and delete coding questions
+- Manage question topics, difficulty levels, constraints, and examples
+- Full CRUD operations for interview questions
+
+### Gateway Integration
+- All API routes automatically proxied through Nginx
+- Seamless endpoint routing between development and production
+- Centralized API management
 
 ## Available Scripts
 
-In the project directory, you can run:
+| Command | Description |
+|---------|-------------|
+| `npm start` | Run React development server |
+| `npm run build` | Create production build |
+| `npm test` | Run available tests |
+| `npm run lint` | Lint codebase |
+| `npm run format` | Format code using Prettier |
 
-### `npm start`
+## API Structure (via Gateway)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+| Service | Base Path | Example Endpoint |
+|---------|-----------|------------------|
+| User Service | `/api/v1/users` | `/api/v1/users/login` |
+| Question Service | `/api/v1/questions` | `/api/v1/questions/all` |
+| Matching Service | `/api/v1/matching` | `/api/v1/matching/health` |
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Best Practices
 
-### `npm test`
+- **Always route through the gateway** for backend communication
+- Use **lowercase difficulty keys** (`easy`, `medium`, `hard`) to match backend schema
+- Use **environment variables** for all external endpoints
+- Keep **Docker and Nginx configuration** consistent with production
+- Follow **feature-based architecture** for better code organization
+- Implement **proper error handling** for all API calls
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Troubleshooting
 
-### `npm run build`
+| Issue | Solution |
+|-------|----------|
+| `404` on `/api/v1/...` | Check Nginx gateway routes and backend service ports |
+| Frontend not updating after rebuild | Clear browser cache or rebuild Docker image |
+| Admin dashboard not fetching questions | Ensure `question-service` is healthy and accessible at `/api/v1/questions` |
+| Monaco Editor not loading | Verify Monaco Editor CDN is accessible or check local build |
+| Authentication issues | Clear localStorage/cookies and verify JWT token validity |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

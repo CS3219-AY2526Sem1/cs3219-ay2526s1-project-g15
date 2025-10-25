@@ -9,7 +9,8 @@ services:
       - ./frontend/build:/usr/share/nginx/html:ro
     depends_on:
       - user-service
-      - question-service   
+      - question-service
+      - matching-service   
     networks: [appnet]
 
   user-service:
@@ -46,9 +47,30 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - appnet
+    networks: [appnet]
     command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
+
+  matching-service:
+    build: ./services/matching-service
+    container_name: matching-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8002
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_matches
+      - REDIS_URL=redis://redis:6379/0
+      - AUTH_ACCESS_SECRET=secretkey   
+      - AUTH_ALGORITHM=HS256           
+      - LOG_LEVEL=INFO
+      - MATCHING_TIMEOUT_SECONDS=60
+    expose:
+      - "8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [appnet]
 
   postgres:
     image: postgres:16
@@ -66,6 +88,13 @@ services:
       interval: 2s
       timeout: 2s
       retries: 20
+    networks: [appnet]
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6380:6379"
     networks: [appnet]
 
   rabbitmq:

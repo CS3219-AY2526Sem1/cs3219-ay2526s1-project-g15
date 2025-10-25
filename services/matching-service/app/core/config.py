@@ -14,13 +14,13 @@ class Settings(BaseSettings):
         default="postgresql://peerprep:peerprep@localhost:5432/peerprep_matches"
     )
     REDIS_URL: str = Field(
-        default="redis://localhost:6380/0", env="REDIS_URL"
+        default="redis://localhost:6380/0"
     )
-    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
+    LOG_LEVEL: str = Field(default="INFO")
 
     # Authentication
     AUTH_ALGORITHM: str = "HS256"
-    AUTH_ACCESS_SECRET: str = Field(..., description="Same as User Service SECRET_KEY")
+    AUTH_ACCESS_SECRET: str = Field(default="secretkey", alias="JWT_SECRET_KEY")  # Added default
     AUTH_ISSUER: str | None = None
     AUTH_AUDIENCE: str | None = None
     
@@ -32,5 +32,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+        populate_by_name = True
 
 settings = Settings()

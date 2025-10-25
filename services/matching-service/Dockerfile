@@ -5,7 +5,7 @@ WORKDIR /app
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl && \
+    build-essential curl postgresql-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements first
@@ -20,5 +20,5 @@ COPY . .
 # Expose the FastAPI port
 EXPOSE 8002
 
-# Use Uvicorn to run the app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+# Run migrations then start the app
+CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002
