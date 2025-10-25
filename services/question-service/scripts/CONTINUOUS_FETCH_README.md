@@ -37,23 +37,7 @@ python scripts/continuous_fetch.py
 3. **Let it run** - it will fetch questions continuously
 
 4. **Stop when done** - Press `Ctrl+C` to stop gracefully
-
-### Output Example:
 ```
-[2025-10-25 20:30:00] [INFO] 🚀 Starting continuous question fetcher...
-[2025-10-25 20:30:00] [INFO] Configuration: 5s delay, 3 retries
-[2025-10-25 20:30:01] [INFO] Found 2500 questions available
-[2025-10-25 20:30:01] [INFO] Starting to fetch 2500 questions...
-[2025-10-25 20:30:01] [INFO] Press Ctrl+C to stop gracefully
-
-[2025-10-25 20:30:01] [INFO] [1/2500] Fetching: two-sum
-[2025-10-25 20:30:02] [INFO] ✓ Saved: 'Two Sum' (Easy, 2 topics)
-[2025-10-25 20:30:02] [INFO] Waiting 5s before next fetch...
-
-[2025-10-25 20:30:07] [INFO] [2/2500] Fetching: add-two-numbers
-[2025-10-25 20:30:08] [INFO] ✓ Saved: 'Add Two Numbers' (Medium, 3 topics)
-...
-
 ============================================================
 📊 PROGRESS STATISTICS
 ============================================================
@@ -72,12 +56,6 @@ python scripts/continuous_fetch.py
 - Default: 5 seconds between questions
 - Adjust if you get rate limited (increase delay)
 - API may have daily/hourly limits
-
-### Database Space
-- ~428 KB per question (average)
-- 10 GB = ~24,000 questions (plenty of room)
-- Script will fail if DB runs out of space
-- Monitor with: `SELECT pg_size_pretty(pg_database_size(current_database()));`
 
 ### Duplicate Handling
 - **Detects duplicates by title only**
