@@ -80,23 +80,23 @@ python scripts/database_architecture_setup.py
 **Base URL:** `http://localhost:8003`
 
 ### Question Management
-- `GET /api/v1/questions/` - List questions (minimal format)
-- `GET /api/v1/questions/{id}` - Get specific question with full details
-- `GET /api/v1/questions/topics` - Get all topics from questions
-- `POST /api/v1/questions/` - Create question (Admin only)
-- `PUT /api/v1/questions/{id}` - Update question (Admin only)
-- `DELETE /api/v1/questions/{id}` - Delete question (Admin only)
-- `PUT /api/v1/questions/{id}/toggle-status` - Enable/disable question (Admin only)
+- `GET /questions/` - List questions (minimal format)
+- `GET /questions/{id}` - Get specific question with full details
+- `GET /questions/topics` - Get all topics from questions
+- `POST /questions/` - Create question (Admin only)
+- `PUT /questions/{id}` - Update question (Admin only)
+- `DELETE /questions/{id}` - Delete question (Admin only)
+- `PUT /questions/{id}/toggle-status` - Enable/disable question (Admin only)
 
 ### Advanced Filtering
-- `GET /api/v1/questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format)
+- `GET /questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format)
   - Query Parameters:
     - `topics` (optional): Array of topic strings (e.g., `topics=Array&topics=Hash Table`)
     - `difficulty` (optional): Difficulty level (`easy`, `medium`, `hard`)
   - Examples:
-    - Filter by difficulty only: `/api/v1/questions/filter/topics-difficulty?difficulty=easy`
-    - Filter by topics only: `/api/v1/questions/filter/topics-difficulty?topics=Array&topics=String`
-    - Combined filtering: `/api/v1/questions/filter/topics-difficulty?difficulty=medium&topics=Dynamic Programming`
+    - Filter by difficulty only: `/questions/filter/topics-difficulty?difficulty=easy`
+    - Filter by topics only: `/questions/filter/topics-difficulty?topics=Array&topics=String`
+    - Combined filtering: `/questions/filter/topics-difficulty?difficulty=medium&topics=Dynamic Programming`
 
 ### Standard Filtering (via /questions endpoint)
 - Query Parameters:
@@ -107,7 +107,7 @@ python scripts/database_architecture_setup.py
   - `search` - Search in title and description
 
 ### Topics
-- `GET /api/v1/questions/topics` - Get all topics
+- `GET /questions/topics` - Get all topics
   - Returns: Sorted array of unique topic strings from all questions
   - Permissions: Public endpoint (admins see topics from inactive questions too)
   - Example Response: `["Array", "Binary Search", "Dynamic Programming", "Hash Table", "String"]`
@@ -129,8 +129,8 @@ For performance, list endpoints and filters return only essential fields:
 ```
 
 **Used by:**
-- `GET /api/v1/questions/` (question lists)
-- `GET /api/v1/questions/filter/topics-difficulty` (filtered results)
+- `GET /questions/` (question lists)
+- `GET /questions/filter/topics-difficulty` (filtered results)
 
 ### Full Question Response Format (Individual Questions)
 ```json
@@ -227,10 +227,10 @@ pytest test_service.py -v
 **Testing the API:**
 ```powershell
 # Test basic questions list
-Invoke-WebRequest -Uri "http://localhost:8003/api/v1/questions" -Method GET
+Invoke-WebRequest -Uri "http://localhost:8003/questions" -Method GET
 
 # Test new filtering endpoint
-Invoke-WebRequest -Uri "http://localhost:8003/api/v1/questions/filter/topics-difficulty?difficulty=easy&topics=Array" -Method GET
+Invoke-WebRequest -Uri "http://localhost:8003/questions/filter/topics-difficulty?difficulty=easy&topics=Array" -Method GET
 ```
 
 ## Troubleshooting

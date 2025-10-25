@@ -26,6 +26,11 @@ class QuestionService:
             if not validate_topics(question_data.topics):
                 raise QuestionValidationError("topics", "Invalid topics format")
 
+            # Check for duplicate title
+            existing = db.query(Question).filter(Question.title == question_data.title).first()
+            if existing:
+                raise QuestionValidationError("title", f"Question with title '{question_data.title}' already exists")
+
             # Validate and filter images if provided
             validated_images = None
             if question_data.images:
