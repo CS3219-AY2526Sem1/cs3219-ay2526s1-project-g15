@@ -31,6 +31,7 @@ DELAY_BETWEEN_QUESTIONS = 5  # seconds between successful fetches
 RETRY_DELAY = 10  # seconds between retries
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 30  # seconds
+MAX_QUESTIONS = 1000  # Maximum number of questions to fetch (set to None for unlimited)
 
 # Difficulty mapping
 DIFFICULTY_MAP = {
@@ -48,37 +49,33 @@ class QuestionFetcher:
         self.duplicate_count = 0
         self.error_count = 0
         self.start_time = datetime.now()
-        self.question_slugs = []
-        self.current_index = 0
+        self.current_question_number = 1
 
     def log(self, message: str, level: str = "INFO"):
         """Log with timestamp"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] [{level}] {message}")
 
-    def get_question_list(self) -> bool:
-        """Fetch the list of all question slugs"""
+    def fetch_question_by_number(self, question_num: int) -> Optional[Dict[str, Any]]:
+        """Fetch question details by problem number"""
         try:
-            self.log("Fetching question list from LeetCode API...")
             response = requests.get(
                 f"{ALFA_LEETCODE_API}/problems",
-                params={"limit": 3000},  # Get as many as possible
+                params={"limit": 1, "skip": question_num - 1},
                 timeout=REQUEST_TIMEOUT
             )
 
             if response.status_code == 200:
                 data = response.json()
                 problems = data.get('problemsetQuestionList', [])
-                self.question_slugs = [p.get('titleSlug') for p in problems if p.get('titleSlug')]
-                self.log(f"Found {len(self.question_slugs)} questions available")
-                return True
-            else:
-                self.log(f"Failed to fetch question list: {response.status_code}", "ERROR")
-                return False
+                if problems:
+                    return problems[0]
+
+            return None
 
         except Exception as e:
-            self.log(f"Error fetching question list: {e}", "ERROR")
-            return False
+            self.log(f"Error fetching question {question_num}: {e}", "ERROR")
+            return None
 
     def check_if_exists(self, title: str) -> bool:
         """Check if question already exists in database"""
@@ -107,10 +104,10 @@ class QuestionFetcher:
             self.log(f"Unexpected error fetching {title_slug}: {e}", "ERROR")
             return None
 
-    def parse_and_save_question(self, detail_data: Dict[str, Any]) -> bool:
+    def parse_and_save_question(self, problem: Dict[str, Any], detail_data: Dict[str, Any]) -> bool:
         """Parse question data and save to database"""
         try:
-            title = detail_data.get('title', 'Untitled')
+            title = problem.get('title', 'Untitled')
 
             # Check for duplicates
             if self.check_if_exists(title):
@@ -167,16 +164,18 @@ class QuestionFetcher:
             self.log(f"Error saving question: {e}", "ERROR")
             return False
 
-    def fetch_single_question_with_retry(self, title_slug: str) -> bool:
+    def fetch_single_question_with_retry(self, problem: Dict[str, Any]) -> bool:
         """Fetch a single question with retry logic"""
+        title_slug = problem.get('titleSlug')
+
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 # Fetch question details
                 detail_data = self.fetch_question_details(title_slug)
 
                 if detail_data:
-                    # Parse and save
-                    success = self.parse_and_save_question(detail_data)
+
+                    success = self.parse_and_save_question(problem, detail_data)
                     if success:
                         return True
 
@@ -215,10 +214,7 @@ class QuestionFetcher:
         print(f"✅ Successfully fetched: {self.fetched_count}")
         print(f"🔁 Duplicates skipped: {self.duplicate_count}")
         print(f"❌ Failed/Skipped: {self.skipped_count}")
-        print(f"📝 Questions processed: {self.current_index}/{len(self.question_slugs)}")
-        if self.current_index > 0:
-            progress = (self.current_index / len(self.question_slugs)) * 100
-            print(f"📈 Progress: {progress:.1f}%")
+        print(f"📝 Current question number: {self.current_question_number}")
         print("="*60 + "\n")
 
     def run(self):
@@ -227,38 +223,34 @@ class QuestionFetcher:
             self.log("🚀 Starting continuous question fetcher...")
             self.log(f"Configuration: {DELAY_BETWEEN_QUESTIONS}s delay, {MAX_RETRIES} retries")
 
-            # Get list of all questions
-            if not self.get_question_list():
-                self.log("Failed to get question list. Exiting.", "ERROR")
-                return
-
-            if not self.question_slugs:
-                self.log("No questions found to fetch. Exiting.", "ERROR")
-                return
-
-            self.log(f"Starting to fetch {len(self.question_slugs)} questions...")
+            if MAX_QUESTIONS:
+                self.log(f"Will stop after successfully fetching {MAX_QUESTIONS} questions")
             self.log("Press Ctrl+C to stop gracefully\n")
 
-            # Infinite loop through questions
             while True:
-                # Get next question slug
-                title_slug = self.question_slugs[self.current_index]
+                # Check if we've reached the max question limit
+                if MAX_QUESTIONS and self.fetched_count >= MAX_QUESTIONS:
+                    self.log(f"\n✅ Reached maximum of {MAX_QUESTIONS} questions!", "INFO")
+                    self.print_stats()
+                    break
 
-                self.log(f"[{self.current_index + 1}/{len(self.question_slugs)}] Fetching: {title_slug}")
+                # Fetch next question by number
+                self.log(f"[Question #{self.current_question_number}] Fetching from API...")
 
-                # Fetch with retry
-                self.fetch_single_question_with_retry(title_slug)
+                problem = self.fetch_question_by_number(self.current_question_number)
+
+                if problem:
+                    # Fetch with retry
+                    self.fetch_single_question_with_retry(problem)
+                else:
+                    self.log(f"No question found at position {self.current_question_number}, skipping", "WARN")
+                    self.skipped_count += 1
 
                 # Move to next question
-                self.current_index += 1
-
-                # If we've gone through all questions, start over
-                if self.current_index >= len(self.question_slugs):
-                    self.log("Reached end of question list, starting over from beginning...")
-                    self.current_index = 0
+                self.current_question_number += 1
 
                 # Print stats every 10 questions
-                if (self.current_index) % 10 == 0:
+                if self.current_question_number % 10 == 0:
                     self.print_stats()
 
                 # Rate limiting delay
