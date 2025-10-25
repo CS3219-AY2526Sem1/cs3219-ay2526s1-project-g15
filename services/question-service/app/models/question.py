@@ -14,7 +14,7 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False, index=True)
+    title = Column(String(255), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=False)
     difficulty = Column(SQLEnum(DifficultyLevel), nullable=False, index=True)
     topics = Column(String(500), nullable=False)  # JSON array
