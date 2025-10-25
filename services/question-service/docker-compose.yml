@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: ${DB_NAME:-peerprep_questions_dev}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports: ["5432:5432"]
+    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+
+  question-service:
+    build: .
+    env_file: .env.dev
+    depends_on: [postgres]
+    ports: ["8003:8003"]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
+    volumes:
+      - ./:/app
+
+volumes:
+  pgdata: {}

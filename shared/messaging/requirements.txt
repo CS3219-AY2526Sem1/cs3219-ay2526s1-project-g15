@@ -1,0 +1,6 @@
+# RabbitMQ client library for async messaging
+aio-pika==9.3.1
+
+# For JSON serialization and other utilities
+pydantic==2.5.0
+python-dotenv==1.0.0

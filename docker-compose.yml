@@ -1,0 +1,125 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gateway/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+    depends_on:
+      - user-service
+      - question-service
+      - matching-service   
+    networks: [appnet]
+
+  user-service:
+    build: ./services/user-service
+    container_name: user-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8001
+      - DATABASE_URL=postgresql+asyncpg://peerprep_user:admin@host.docker.internal:5433/peerprep_users
+      - SECRET=secretkey
+      - ALGORITHM=HS256
+      - ACCESS_TTL_MIN=15
+      - REFRESH_TTL_DAYS=7
+    expose:
+      - "8001"
+    networks: [appnet]
+
+  question-service:
+    build: ./services/question-service         
+    container_name: question-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8003
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_questions_dev
+      - USER_SERVICE_URL=http://user-service:8001
+      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+    expose:
+      - "8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [appnet]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
+
+  matching-service:
+    build: ./services/matching-service
+    container_name: matching-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8002
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_matches
+      - REDIS_URL=redis://redis:6379/0
+      - AUTH_ACCESS_SECRET=secretkey   
+      - AUTH_ALGORITHM=HS256           
+      - LOG_LEVEL=INFO
+      - MATCHING_TIMEOUT_SECONDS=60
+    expose:
+      - "8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks: [appnet]
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=peerprep_users
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [appnet]
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6380:6379"
+    networks: [appnet]
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error},{default,info}] disk_free_limit 2147483648
+    ports:
+      - "5672:5672"     # AMQP port
+      - "15672:15672"   # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    networks: [appnet]
+
+volumes:
+  pgdata:
+  rabbitmq_data:
+
+networks:
+  appnet:
+    driver: bridge
