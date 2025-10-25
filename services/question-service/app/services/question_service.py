@@ -164,3 +164,34 @@ class QuestionService:
             query = query.filter(or_(*topic_conditions))
 
         return query.all()
+
+    @staticmethod
+    def get_all_topics(db: Session, include_inactive: bool = False) -> List[str]:
+        """Get all unique topics from all questions"""
+        query = db.query(Question.topics)
+
+        # Defaults return only active questions
+        if not include_inactive:
+            query = query.filter(Question.is_active == True)
+
+        # Get all topic fields
+        results = query.all()
+
+        # Parse JSON and collect unique topics
+        all_topics = set()
+        for (topics_json,) in results:
+            if topics_json:
+                try:
+                    topics = safe_json_loads(topics_json)
+                    if isinstance(topics, list):
+                        for topic in topics:
+                            if isinstance(topic, str):
+                                all_topics.add(topic)
+                            elif isinstance(topic, dict) and 'name' in topic:
+                                all_topics.add(topic['name'])
+                except Exception as e:
+                    logger.warning(f"Failed to parse topics JSON: {e}")
+                    continue
+
+        # Return sorted list
+        return sorted(list(all_topics))

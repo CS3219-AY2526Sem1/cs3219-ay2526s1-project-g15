@@ -82,6 +82,7 @@ python scripts/database_architecture_setup.py
 ### Question Management
 - `GET /api/v1/questions/` - List questions (minimal format)
 - `GET /api/v1/questions/{id}` - Get specific question with full details
+- `GET /api/v1/questions/topics` - Get all topics from questions
 - `POST /api/v1/questions/` - Create question (Admin only)
 - `PUT /api/v1/questions/{id}` - Update question (Admin only)
 - `DELETE /api/v1/questions/{id}` - Delete question (Admin only)
@@ -104,6 +105,12 @@ python scripts/database_architecture_setup.py
   - `difficulty` - Filter by difficulty level
   - `topics` - Filter by topics (comma-separated)
   - `search` - Search in title and description
+
+### Topics
+- `GET /api/v1/questions/topics` - Get all topics
+  - Returns: Sorted array of unique topic strings from all questions
+  - Permissions: Public endpoint (admins see topics from inactive questions too)
+  - Example Response: `["Array", "Binary Search", "Dynamic Programming", "Hash Table", "String"]`
 
 **Interactive Documentation:** http://localhost:8003/docs
 
