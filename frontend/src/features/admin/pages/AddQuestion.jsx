@@ -52,7 +52,7 @@ export default function AddQuestion() {
         : [...f.topics, topic]
     }));
   };
-
+  
   // Examples
   const onAddExample = () =>
     setForm((f) => ({ 
@@ -155,7 +155,7 @@ export default function AddQuestion() {
       
       await questionService.createQuestion(questionData);
       
-      // Success - navigate back to admin home
+      // navigate back to admin home if succesful
       navigate("/admin/home");
     } catch (err) {
       console.error("Failed to create question:", err);

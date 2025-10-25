@@ -179,11 +179,11 @@ export default function AdminQuestionView() {
                 </div>
                 <pre className="text-gray-300 text-sm font-mono">
                   {`// This is a preview of how users will see the code editor
-                    // The actual editor will allow users to write code here
+// The actual editor will allow users to write code here
 
-                    function solution() {
-                      // Write your solution here
-                    }`
+function solution() {
+  // Write your solution here
+}`
                   }
                 </pre>
               </div>

@@ -1,68 +1,117 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
+import { questionService } from "../../../shared/api/questionService";
 
-const DIFFICULTIES = ["Easy", "Medium", "Difficult"];
-const TOPICS = ["Arrays","Strings","Linked Lists","Trees","Graphs","Greedy","DP","Math","Sorting"];
+// Backend expects: "easy", "medium", "hard" (lowercase)
+const DIFFICULTIES = [
+  { label: "Easy", value: "easy" },
+  { label: "Medium", value: "medium" },
+  { label: "Difficult", value: "hard" }
+];
 
-// --- mock fetch; replace with your API call ---
-async function fetchQuestionById(id) {
-  // TODO: api.questions.get(id)
-  await new Promise(r => setTimeout(r, 150));
-  return {
-    id,
-    title: "Interview Question 1",
-    description: "Common question that comes out in interviews",
-    difficulty: "Easy",
-    topic: "Sorting",
-    tags: ["Google"],
-    testCases: [
-      { in: "[1,3,2]", out: "[1,2,3]" },
-    ],
-  };
-}
+const TOPICS = [
+  "Arrays",
+  "Strings",
+  "Linked Lists",
+  "Trees",
+  "Graphs",
+  "Greedy",
+  "Dynamic Programming",
+  "Math",
+  "Hash Table",
+  "Sorting",
+  "Binary Search",
+];
 
 export default function EditQuestion() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [tagInput, setTagInput] = useState("");
+  const [customTopicInput, setCustomTopicInput] = useState("");
 
   const [form, setForm] = useState({
     title: "",
     description: "",
     difficulty: "",
-    topic: "",
+    topics: [],
     tags: [],
-    testCases: [{ in: "", out: "" }],
+    constraints: "",
+    examples: [{ input: "", output: "", explanation: "" }],
+    testCases: [{ input: "", output: "" }],
   });
 
-  // load question
+  // Load question from backend
   useEffect(() => {
     let ok = true;
     (async () => {
-      setLoading(true);
-      const data = await fetchQuestionById(id);
-      if (!ok) return;
-      setForm({
-        title: data.title || "",
-        description: data.description || "",
-        difficulty: data.difficulty || "",
-        topic: data.topic || "",
-        tags: data.tags || [],
-        testCases: data.testCases?.length ? data.testCases : [{ in: "", out: "" }],
-      });
-      setLoading(false);
+      try {
+        setLoading(true);
+        const data = await questionService.getQuestion(id);
+        if (!ok) return;
+        
+        // Transform backend data to form state
+        setForm({
+          title: data.title || "",
+          description: data.description || "",
+          difficulty: data.difficulty || "",
+          topics: data.topics || [],
+          tags: data.tags || [],
+          constraints: data.constraints || "",
+          examples: data.examples?.length ? data.examples : [{ input: "", output: "", explanation: "" }],
+          testCases: data.test_cases?.length 
+            ? data.test_cases.map(tc => ({
+                input: typeof tc.input === 'object' ? JSON.stringify(tc.input, null, 2) : tc.input,
+                output: typeof tc.output === 'object' ? JSON.stringify(tc.output, null, 2) : tc.output
+              }))
+            : [{ input: "", output: "" }],
+        });
+      } catch (e) {
+        console.error("Failed to load question:", e);
+        setErrors({ load: "Failed to load question data" });
+      } finally {
+        setLoading(false);
+      }
     })();
     return () => { ok = false; };
   }, [id]);
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  // Handle multi-select topics
+  const toggleTopic = (topic) => {
+    setForm((f) => ({
+      ...f,
+      topics: f.topics.includes(topic)
+        ? f.topics.filter(t => t !== topic)
+        : [...f.topics, topic]
+    }));
+  };
+
+  // Examples
+  const onAddExample = () =>
+    setForm(f => ({ 
+      ...f, 
+      examples: [...f.examples, { input: "", output: "", explanation: "" }] 
+    }));
+
+  const onRemoveExample = (idx) =>
+    setForm(f => ({ ...f, examples: f.examples.filter((_, i) => i !== idx) }));
+
+  const onChangeExample = (idx, key, val) =>
+    setForm(f => {
+      const next = f.examples.slice();
+      next[idx] = { ...next[idx], [key]: val };
+      return { ...f, examples: next };
+    });
+
+  // Test Cases
   const onAddTestCase = () =>
-    setForm(f => ({ ...f, testCases: [...f.testCases, { in: "", out: "" }] }));
+    setForm(f => ({ ...f, testCases: [...f.testCases, { input: "", output: "" }] }));
 
   const onRemoveTestCase = (idx) =>
     setForm(f => ({ ...f, testCases: f.testCases.filter((_, i) => i !== idx) }));
@@ -74,6 +123,7 @@ export default function EditQuestion() {
       return { ...f, testCases: next };
     });
 
+  // Tags
   const addTagFromInput = () => {
     const raw = tagInput.trim();
     if (!raw) return;
@@ -87,7 +137,6 @@ export default function EditQuestion() {
       e.preventDefault();
       addTagFromInput();
     } else if (e.key === "Backspace" && !tagInput && form.tags.length) {
-      // quick remove last on backspace
       setForm(f => ({ ...f, tags: f.tags.slice(0, -1) }));
     }
   };
@@ -100,22 +149,62 @@ export default function EditQuestion() {
     if (!form.title.trim()) e.title = "Title is required.";
     if (!form.description.trim()) e.description = "Description is required.";
     if (!form.difficulty) e.difficulty = "Choose a difficulty.";
-    if (!form.topic) e.topic = "Choose a topic.";
+    if (form.topics.length === 0) e.topics = "Select at least one topic.";
     return e;
   };
 
   const onCancel = () => navigate(-1);
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (evt) => {
+    evt.preventDefault();
     const eObj = validate();
     setErrors(eObj);
     if (Object.keys(eObj).length) return;
 
-    // TODO: await api.questions.update(id, form)
-    console.log("Saving question", { id, ...form });
+    setSubmitting(true);
 
-    navigate("/admin/home"); // or your list route
+    try {
+      // Parse test cases - convert string inputs to JSON objects
+      const parsedTestCases = form.testCases
+        .filter(tc => tc.input.trim() && tc.output.trim())
+        .map((tc, idx) => {
+          try {
+            const inputObj = JSON.parse(tc.input);
+            const outputObj = JSON.parse(tc.output);
+            return { input: inputObj, output: outputObj };
+          } catch (err) {
+            console.warn(`Test case ${idx + 1} not in JSON format, using as strings:`, tc);
+            return {
+              input: tc.input,
+              output: tc.output
+            };
+          }
+        });
+
+      // Prepare data for backend
+      const questionData = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        difficulty: form.difficulty,
+        topics: form.topics,
+        constraints: form.constraints.trim() || undefined,
+        examples: form.examples.filter(ex => ex.input.trim() || ex.output.trim()),
+        test_cases: parsedTestCases,
+        is_active: true
+      };
+
+      console.log("Updating question:", questionData);
+      
+      await questionService.updateQuestion(id, questionData);
+      
+      // Success - navigate back
+      navigate("/admin/home");
+    } catch (err) {
+      console.error("Failed to update question:", err);
+      setErrors({ submit: err.message || "Failed to update question. Please try again." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const tagChips = useMemo(
@@ -129,6 +218,7 @@ export default function EditQuestion() {
           <button
             type="button"
             onClick={() => removeTag(t)}
+            disabled={submitting}
             className="text-[#4A53A7]/70 hover:text-[#4A53A7] -mr-1"
             aria-label={`Remove tag ${t}`}
           >
@@ -136,7 +226,7 @@ export default function EditQuestion() {
           </button>
         </span>
       )),
-    [form.tags]
+    [form.tags, submitting]
   );
 
   return (
@@ -151,14 +241,32 @@ export default function EditQuestion() {
 
             {loading ? (
               <div className="py-16 text-center text-gray-500">Loading…</div>
+            ) : errors.load ? (
+              <div className="py-16 text-center">
+                <p className="text-red-600 mb-4">{errors.load}</p>
+                <button
+                  onClick={() => navigate("/admin/home")}
+                  className="text-[#4A53A7] hover:underline"
+                >
+                  Back to Questions
+                </button>
+              </div>
             ) : (
               <form onSubmit={onSubmit} className="space-y-5">
+                {/* Global Error */}
+                {errors.submit && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                    <p className="text-sm text-red-800">{errors.submit}</p>
+                  </div>
+                )}
+
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Title</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
                   <input
                     value={form.title}
                     onChange={(e) => setField("title", e.target.value)}
+                    disabled={submitting}
                     className="w-full rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7]"
                   />
                   {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title}</p>}
@@ -166,11 +274,12 @@ export default function EditQuestion() {
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Description *</label>
                   <textarea
                     rows={5}
                     value={form.description}
                     onChange={(e) => setField("description", e.target.value)}
+                    disabled={submitting}
                     className="w-full rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] resize-y"
                   />
                   {errors.description && <p className="text-sm text-red-600 mt-1">{errors.description}</p>}
@@ -178,35 +287,64 @@ export default function EditQuestion() {
 
                 {/* Difficulty */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Difficulty</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Difficulty *</label>
                   <select
                     value={form.difficulty}
                     onChange={(e) => setField("difficulty", e.target.value)}
+                    disabled={submitting}
                     className="w-full rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7]"
                   >
                     <option value="" disabled>Select difficulty</option>
-                    {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                    {DIFFICULTIES.map(d => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
                   </select>
                   {errors.difficulty && <p className="text-sm text-red-600 mt-1">{errors.difficulty}</p>}
                 </div>
 
-                {/* Topic */}
+                {/* Topics (Multi-select) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Topics</label>
-                  <select
-                    value={form.topic}
-                    onChange={(e) => setField("topic", e.target.value)}
-                    className="w-full rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7]"
-                  >
-                    <option value="" disabled>Select topic</option>
-                    {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  {errors.topic && <p className="text-sm text-red-600 mt-1">{errors.topic}</p>}
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
+                    Topics * (select at least one)
+                  </label>
+                  <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
+                    {TOPICS.map((topic) => (
+                      <button
+                        key={topic}
+                        type="button"
+                        onClick={() => toggleTopic(topic)}
+                        disabled={submitting}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                          form.topics.includes(topic)
+                            ? "bg-[#4A53A7] text-white"
+                            : "bg-white text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {topic}
+                      </button>
+                    ))}
+                  </div>
+                  {errors.topics && <p className="text-sm text-red-600 mt-1">{errors.topics}</p>}
+                </div>
+
+                {/* Constraints */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">
+                    Constraints (optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={form.constraints}
+                    onChange={(e) => setField("constraints", e.target.value)}
+                    placeholder="e.g., 1 <= nums.length <= 10^4"
+                    disabled={submitting}
+                    className="w-full rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] resize-y"
+                  />
                 </div>
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Tags</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Tags (optional)</label>
                   <div className="w-full rounded-xl bg-gray-100 px-3 py-2">
                     <div className="flex flex-wrap gap-2">
                       {tagChips}
@@ -215,11 +353,13 @@ export default function EditQuestion() {
                         onChange={(e) => setTagInput(e.target.value)}
                         onKeyDown={onTagKeyDown}
                         placeholder="Type and press Enter…"
+                        disabled={submitting}
                         className="min-w-[8rem] flex-1 bg-transparent outline-none"
                       />
                       <button
                         type="button"
                         onClick={addTagFromInput}
+                        disabled={submitting}
                         className="rounded-full bg-gray-200 hover:bg-gray-300 px-2"
                         aria-label="Add tag"
                         title="Add tag"
@@ -230,27 +370,86 @@ export default function EditQuestion() {
                   </div>
                 </div>
 
+                {/* Examples */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-800 mb-2">
+                    Examples (optional)
+                  </label>
+                  <div className="space-y-3">
+                    {form.examples.map((ex, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                        <input
+                          value={ex.input}
+                          onChange={(e) => onChangeExample(idx, "input", e.target.value)}
+                          placeholder="Input (e.g., nums = [2,7,11,15], target = 9)"
+                          disabled={submitting}
+                          className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4A53A7]"
+                        />
+                        <input
+                          value={ex.output}
+                          onChange={(e) => onChangeExample(idx, "output", e.target.value)}
+                          placeholder="Output (e.g., [0,1])"
+                          disabled={submitting}
+                          className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4A53A7]"
+                        />
+                        <input
+                          value={ex.explanation}
+                          onChange={(e) => onChangeExample(idx, "explanation", e.target.value)}
+                          placeholder="Explanation (optional)"
+                          disabled={submitting}
+                          className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4A53A7]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => onRemoveExample(idx)}
+                          disabled={submitting}
+                          className="rounded-full bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 text-sm"
+                        >
+                          Remove Example
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onAddExample}
+                    disabled={submitting}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-200 hover:bg-gray-300 px-4 py-2 text-sm"
+                  >
+                    <span className="text-lg leading-none">＋</span>
+                    Add Example
+                  </button>
+                </div>
+
                 {/* Test Cases */}
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-2">Test Cases</label>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Enter test cases in JSON format (recommended) or as plain text.
+                  </p>
                   <div className="space-y-3">
                     {form.testCases.map((tc, idx) => (
                       <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                        <input
-                          value={tc.in}
-                          onChange={(e) => onChangeTestCase(idx, "in", e.target.value)}
-                          placeholder='Input (e.g., "[1,2,3]")'
-                          className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7]"
+                        <textarea
+                          value={tc.input}
+                          onChange={(e) => onChangeTestCase(idx, "input", e.target.value)}
+                          placeholder='Input: {"nums": [2,7], "target": 9}'
+                          rows={2}
+                          disabled={submitting}
+                          className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] font-mono text-sm resize-y"
                         />
-                        <input
-                          value={tc.out}
-                          onChange={(e) => onChangeTestCase(idx, "out", e.target.value)}
-                          placeholder="Expected Output"
-                          className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7]"
+                        <textarea
+                          value={tc.output}
+                          onChange={(e) => onChangeTestCase(idx, "output", e.target.value)}
+                          placeholder="Output: [0,1]"
+                          rows={2}
+                          disabled={submitting}
+                          className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] font-mono text-sm resize-y"
                         />
                         <button
                           type="button"
                           onClick={() => onRemoveTestCase(idx)}
+                          disabled={submitting}
                           className="justify-self-start md:justify-self-end rounded-full bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1.5 text-sm"
                           aria-label={`Remove test case ${idx + 1}`}
                         >
@@ -263,6 +462,7 @@ export default function EditQuestion() {
                     <button
                       type="button"
                       onClick={onAddTestCase}
+                      disabled={submitting}
                       className="inline-flex items-center gap-2 rounded-full bg-gray-200 hover:bg-gray-300 px-4 py-2 text-sm"
                     >
                       <span className="text-lg leading-none">＋</span>
@@ -276,15 +476,17 @@ export default function EditQuestion() {
                   <button
                     type="button"
                     onClick={onCancel}
-                    className="rounded-full bg-[#A74A4C] hover:bg-[#7c3738] text-white px-8 py-2.5 text-base font-medium"
+                    disabled={submitting}
+                    className="rounded-full bg-[#A74A4C] hover:bg-[#7c3738] text-white px-8 py-2.5 text-base font-medium disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-full bg-[#4A53A7] hover:bg-[#3b4287] text-white px-8 py-2.5 text-base font-medium"
+                    disabled={submitting}
+                    className="rounded-full bg-[#4A53A7] hover:bg-[#3b4287] text-white px-8 py-2.5 text-base font-medium disabled:opacity-50"
                   >
-                    Save
+                    {submitting ? "Saving..." : "Save"}
                   </button>
                 </div>
               </form>
