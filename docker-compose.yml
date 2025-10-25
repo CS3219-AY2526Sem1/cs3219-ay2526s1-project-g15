@@ -22,7 +22,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8001
-      - DATABASE_URL=postgresql+asyncpg://peerprep_user:admin@host.docker.internal:5433/peerprep_users
+      - DATABASE_URL=postgresql+asyncpg://peerprep_user:admin@host.docker.internal:5434/peerprep_users
       - SECRET=secretkey
       - ALGORITHM=HS256
       - ACCESS_TTL_MIN=15
