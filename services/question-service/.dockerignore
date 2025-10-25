@@ -28,6 +28,10 @@ htmlcov/
 
 # Git
 .git/
+
+# Cloud SQL Proxy (local binary, not for Docker)
+cloud-sql-proxy.exe
+cloud-sql-proxy
 .gitignore
 
 # Documentation
