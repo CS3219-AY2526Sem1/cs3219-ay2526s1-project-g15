@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+    container_name: collaboration-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - peerprep-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: collaboration-rabbitmq
+    ports:
+      - "5672:5672"  # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - peerprep-net
+
+  collaboration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: collaboration-service
+    env_file:
+      - ./.env
+    ports:
+      - "8004:8004"
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - peerprep-net
+    volumes:
+      - ./:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --reload
+
+networks:
+  peerprep-net:
+    driver: bridge
