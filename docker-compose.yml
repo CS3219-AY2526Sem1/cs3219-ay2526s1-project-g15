@@ -10,7 +10,7 @@ services:
     depends_on:
       - user-service
       - question-service
-      - matching-service   
+      - matching-service
     networks: [appnet]
 
   user-service:
@@ -32,17 +32,19 @@ services:
     networks: [appnet]
 
   question-service:
-    build: ./services/question-service         
+    build: ./services/question-service
     container_name: question-service
     environment:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8003
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_questions_dev
+      - DATABASE_URL=postgresql+psycopg://postgres:${DB_PASSWORD}@host.docker.internal:5434/peerprep_questions
       - USER_SERVICE_URL=http://user-service:8001
       - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
     expose:
       - "8003"
+    ports:
+      - "8003:8003"
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,8 +60,8 @@ services:
       - PORT=8002
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_matches
       - REDIS_URL=redis://redis:6379/0
-      - AUTH_ACCESS_SECRET=secretkey   
-      - AUTH_ALGORITHM=HS256           
+      - AUTH_ACCESS_SECRET=secretkey
+      - AUTH_ALGORITHM=HS256
       - LOG_LEVEL=INFO
       - MATCHING_TIMEOUT_SECONDS=60
     expose:
