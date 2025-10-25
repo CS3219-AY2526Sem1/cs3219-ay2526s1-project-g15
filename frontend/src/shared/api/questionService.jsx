@@ -1,7 +1,7 @@
-const API_BASE = '/questions/'; 
+const API_BASE = '/questions/';
 
 function authHeaders() {
-  const t = localStorage.getItem('accessToken'); 
+  const t = localStorage.getItem('accessToken');
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
@@ -21,7 +21,7 @@ export const questionService = {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch questions');
     const data = await response.json();
-    
+
     // Handle paginated response format
     if (data.questions && Array.isArray(data.questions)) {
         return data.questions;
@@ -43,7 +43,7 @@ export const questionService = {
     const url = new URL(`${API_BASE}filter/topics-difficulty`, window.location.origin);
     topics.forEach(t => url.searchParams.append('topics', t));
     if (difficulty) url.searchParams.set('difficulty', difficulty);
-    
+
     const data = await fetchJson(url.toString(), { headers: authHeaders() });
     if (data.questions && Array.isArray(data.questions)) {
         return data.questions;
@@ -62,7 +62,7 @@ export const questionService = {
       body: JSON.stringify(data),
     });
   },
-  
+
   async updateQuestion(id, data) {
     return fetchJson(`${API_BASE}${id}`, {
       method: 'PUT',
@@ -76,11 +76,11 @@ export const questionService = {
         method: 'DELETE',
         headers: authHeaders(),
     });
-    
+
     if (!res.ok) {
         throw new Error(`Failed to delete question: ${res.status} ${res.statusText}`);
     }
-    
+
     // 204 No Content has no body to parse
     return { success: true };
   },
