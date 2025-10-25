@@ -40,30 +40,20 @@ class Settings(BaseSettings):
     log_format: str = "json"
 
     # CORS
-    allowed_origins: Union[str, List[str]] = Field(
+    allowed_origins: str = Field(
         default="http://localhost:3000,http://localhost:3001"
     )
 
-    @field_validator('allowed_origins', mode='before')
+    @field_validator('allowed_origins', mode='after')
     @classmethod
     def parse_allowed_origins(cls, v):
-        """Parse ALLOWED_ORIGINS from comma-separated string or JSON array"""
-        if v is None or v == "":
-            return ["http://localhost:3000", "http://localhost:3001"]
+        """Parse ALLOWED_ORIGINS from comma-separated string"""
         if isinstance(v, list):
             return v
         if isinstance(v, str):
             # Handle comma-separated string
-            if v.startswith('['):
-                # It's a JSON array string
-                import json
-                try:
-                    return json.loads(v)
-                except json.JSONDecodeError:
-                    pass
-            # It's a comma-separated string
             return [origin.strip() for origin in v.split(',') if origin.strip()]
-        return v
+        return ["http://localhost:3000", "http://localhost:3001"]
 
     def get_database_url(self) -> str:
         """Get PostgreSQL database URL based on environment"""

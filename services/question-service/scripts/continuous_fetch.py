@@ -49,7 +49,7 @@ class QuestionFetcher:
         self.duplicate_count = 0
         self.error_count = 0
         self.start_time = datetime.now()
-        self.current_question_number = 1
+        self.current_question_number = 14
 
     def log(self, message: str, level: str = "INFO"):
         """Log with timestamp"""
