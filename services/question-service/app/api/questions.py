@@ -61,6 +61,19 @@ def get_questions(
     )
 
 
+@router.get("/topics", response_model=List[str])
+def get_all_topics(
+    db: Session = Depends(get_db),
+    auth_context: dict = Depends(get_question_filter_context)
+):
+    """Get all unique topics from questions (admins see all, users see active only)"""
+    topics = QuestionService.get_all_topics(
+        db=db,
+        include_inactive=auth_context["is_admin"]
+    )
+    return topics
+
+
 @router.get("/{question_id}", response_model=QuestionResponse)
 def get_question(
     question_id: int,
@@ -176,16 +189,3 @@ def get_questions_by_topics_and_difficulty(
             db=db, skip=0, limit=100, filters=None, include_inactive=auth_context["is_admin"]
         )
         return questions
-
-
-@router.get("/topics", response_model=List[str])
-def get_all_topics(
-    db: Session = Depends(get_db),
-    auth_context: dict = Depends(get_question_filter_context)
-):
-    """Get all unique topics from questions (admins see all, users see active only)"""
-    topics = QuestionService.get_all_topics(
-        db=db,
-        include_inactive=auth_context["is_admin"]
-    )
-    return topics
