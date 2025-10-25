@@ -1,49 +1,64 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import AdminTopNav from "../components/AdminTopNav";
 import { useNavigate } from "react-router-dom";
+import { questionService } from "../../../shared/api/questionService";
 
-const DIFF_COLOR = {
-  Easy: "text-green-600",
-  Medium: "text-amber-500",
-  Difficult: "text-red-600",
+const DIFF_COLOR = { 
+  easy: "text-green-600", 
+  medium: "text-amber-500", 
+  hard: "text-red-600" 
 };
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// TODO: replace hardcoded data with DB data
-const INITIAL = [
-  { id: 1, title: "Interview Question 1", topic: "Arrays",       difficulty: "Easy",      solved: true  },
-  { id: 2, title: "Interview Question 2", topic: "Strings",      difficulty: "Easy",      solved: false },
-  { id: 3, title: "Interview Question 3", topic: "Graphs",       difficulty: "Medium",    solved: false },
-  { id: 4, title: "Interview Question 4", topic: "Linked Lists", difficulty: "Easy",      solved: false },
-  { id: 5, title: "Interview Question 5", topic: "DP",           difficulty: "Difficult", solved: true  },
-  { id: 6, title: "Interview Question 6", topic: "Trees",        difficulty: "Difficult", solved: false },
-  { id: 7, title: "Interview Question 7", topic: "Greedy",       difficulty: "Medium",    solved: false },
-  { id: 8, title: "Interview Question 8", topic: "Math",         difficulty: "Medium",    solved: false },
-];
-
 export default function AdminHome() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
-  const [items, setItems] = useState(INITIAL);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const loadQuestions = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErr("");
+      const data = await questionService.getQuestions();
+      setItems(Array.isArray(data) ? data : []);
+      console.log("Loaded questions:", data);
+    } catch (e) {
+      console.error(e);
+      setErr("Failed to load questions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQuestions();
+  }, [loadQuestions]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return items;
-    return items.filter(
-      (i) =>
-        i.title.toLowerCase().includes(s) ||
-        i.topic.toLowerCase().includes(s)
+    return items.filter(i =>
+      i.title?.toLowerCase().includes(s) ||
+      (i.topics && i.topics.some(t => t.toLowerCase().includes(s)))
     );
   }, [q, items]);
 
-  const onAdd = () => navigate("/admin/add-questions"); 
+  const onAdd = () => navigate("/admin/add-questions");
+  
   const onEdit = (item) => navigate(`/admin/questions/${item.id}/edit`);
-  const onDelete = (item) => {
-    const ok = window.confirm(`Delete "${item.title}"? This cannot be undone.`);
-    if (ok) setItems((prev) => prev.filter((x) => x.id !== item.id));
+  
+  const onDelete = async (item) => {
+    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
+    try {
+      await questionService.deleteQuestion(item.id);
+      setItems(prev => prev.filter(x => x.id !== item.id));
+    } catch (e) {
+      alert("Failed to delete question");
+    }
   };
-
 
   return (
     <div className="min-h-screen bg-[#D7D6E6] flex flex-col">
@@ -80,51 +95,79 @@ export default function AdminHome() {
                 </button>
               </div>
 
-              {/* List */}
-              <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-                {filtered.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-[56px_1fr_120px_90px_90px] items-center gap-2 px-4 py-3 border-b last:border-b-0"
+              {/* Loading State */}
+              {loading && (
+                <div className="text-center py-8 text-gray-500">
+                  Loading questions...
+                </div>
+              )}
+
+              {/* Error State */}
+              {err && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-4 mb-4">
+                  <p className="text-red-800 text-sm">Error: {err}</p>
+                  <button 
+                    onClick={loadQuestions}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
                   >
-                    {/* index */}
-                    <div className="tabular-nums text-gray-500">{pad2(idx + 1)}</div>
+                    Try again
+                  </button>
+                </div>
+              )}
 
-                    {/* Question title */}
-                    <button
-                      onClick={() => alert(`Open "${item.title}" (mock)`)}
-                      className="text-left text-gray-900 hover:text-[#4A53A7] font-medium"
-                    >
-                      {item.title}
-                    </button>
-
-                    {/* difficulty */}
-                    <div className={`text-sm ${DIFF_COLOR[item.difficulty] || "text-gray-600"}`}>
-                      {item.difficulty}
+              {/* List */}
+              {!loading && !err && (
+                <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                  {filtered.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      {q ? 'No questions match your search' : 'No questions available'}
                     </div>
-
-                    {/* edit */}
-                    <div className="justify-self-end">
-                      <button
-                        onClick={() => onEdit(item)}
-                        className="rounded-full bg-[#68659A] hover:bg-[#595684] text-white px-4 py-1.5 text-sm font-medium transition"
+                  ) : (
+                    filtered.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-[56px_1fr_120px_90px_90px] items-center gap-2 px-4 py-3 border-b last:border-b-0"
                       >
-                        Edit
-                      </button>
-                    </div>
+                        {/* index */}
+                        <div className="tabular-nums text-gray-500">{pad2(idx + 1)}</div>
 
-                    {/* delete */}
-                    <div className="justify-self-end">
-                      <button
-                        onClick={() => onDelete(item)}
-                        className="rounded-full bg-[#A74A4C] hover:bg-[#7c3738] text-white px-4 py-1.5 text-sm font-medium transition"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                        {/* Question title */}
+                        <button
+                          onClick={() => navigate(`/admin/questions/${item.id}`)}
+                          className="text-left text-gray-900 hover:text-[#4A53A7] font-medium"
+                        >
+                          {item.title}
+                        </button>
+
+                        {/* difficulty */}
+                        <div className={`text-sm capitalize ${DIFF_COLOR[item.difficulty] || "text-gray-600"}`}>
+                          {item.difficulty}
+                        </div>
+
+                        {/* edit */}
+                        <div className="justify-self-end">
+                          <button
+                            onClick={() => onEdit(item)}
+                            className="rounded-full bg-[#68659A] hover:bg-[#595684] text-white px-4 py-1.5 text-sm font-medium transition"
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        {/* delete */}
+                        <div className="justify-self-end">
+                          <button
+                            onClick={() => onDelete(item)}
+                            className="rounded-full bg-[#A74A4C] hover:bg-[#7c3738] text-white px-4 py-1.5 text-sm font-medium transition"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </section>
           </div>
         </div>
