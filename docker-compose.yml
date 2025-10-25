@@ -38,15 +38,17 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8003
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_questions_dev
       - USER_SERVICE_URL=http://user-service:8001
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/peerprep_questions_dev
+      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
     expose:
       - "8003"
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [appnet]
-  # -----------
+    networks:
+      - appnet
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
 
   postgres:
     image: postgres:16
