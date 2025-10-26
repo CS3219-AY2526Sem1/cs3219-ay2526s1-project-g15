@@ -25,11 +25,6 @@ class Settings(BaseSettings):
     # User Service settings (for API calls)
     user_service_url: str = "http://localhost:8001"
 
-    # AWS settings
-    aws_region: str = "us-east-1"
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
-
     # Redis settings
     redis_host: str = "localhost"
     redis_port: int = 6379

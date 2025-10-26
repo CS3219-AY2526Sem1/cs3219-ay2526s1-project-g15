@@ -1,6 +1,8 @@
+from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.api.questions import router as questions_router
 from app.api import api_router
 from app.core.database import engine
 from app.core.database import Base
@@ -10,7 +12,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.app_name,
-    description="Question Service for PeerPrep - Technical Interview Preparation Platform",
+    description="Question Service for PeerPrep",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -26,7 +28,9 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(api_router)
+api_router = APIRouter()
+api_router.include_router(questions_router)
+app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/")
