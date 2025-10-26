@@ -78,7 +78,7 @@ def validate_title(title: str) -> bool:
         return False
 
     title = title.strip()
-    if len(title) < 3 or len(title) > 255:
+    if len(title) < 1 or len(title) > 255:
         return False
 
     # Check for basic validity (no HTML tags in title)

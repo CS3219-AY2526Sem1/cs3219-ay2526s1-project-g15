@@ -30,34 +30,28 @@ def create_question(
 
 @router.get("/", response_model=QuestionList)
 def get_questions(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     difficulty: Optional[DifficultyLevel] = Query(None, description="Filter by difficulty"),
     topics: Optional[List[str]] = Query(None, description="Filter by topics"),
     search: Optional[str] = Query(None, description="Search in title and description"),
     db: Session = Depends(get_db),
     auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Get questions with pagination and filtering (admins see all, users see active only)"""
-    skip = (page - 1) * per_page
-
+    """Get all questions with filtering (admins see all, users see active only)"""
     filters = QuestionFilter(difficulty=difficulty, topics=topics, search=search)
     questions, total = QuestionService.get_questions(
         db=db,
-        skip=skip,
-        limit=per_page,
+        skip=0,
+        limit=None,
         filters=filters,
-        include_inactive=auth_context["is_admin"]  # Admins can see inactive questions
+        include_inactive=auth_context["is_admin"]
     )
-
-    total_pages = math.ceil(total / per_page) if total > 0 else 1
 
     return QuestionList(
         questions=questions,
         total=total,
-        page=page,
-        per_page=per_page,
-        total_pages=total_pages
+        page=1,
+        per_page=total,
+        total_pages=1
     )
 
 
@@ -103,9 +97,9 @@ def update_question(
     question_id: int,
     question: QuestionUpdate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_admin)
+    auth_context: dict = Depends(get_question_filter_context)
 ):
-    """Update a question"""
+    """Update a question (same access as GET)"""
     updated_question = QuestionService.update_question(
         db=db, question_id=question_id, question_data=question
     )

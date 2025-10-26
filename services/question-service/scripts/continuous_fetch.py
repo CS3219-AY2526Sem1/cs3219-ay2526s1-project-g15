@@ -49,28 +49,34 @@ class QuestionFetcher:
         self.duplicate_count = 0
         self.error_count = 0
         self.start_time = datetime.now()
-        self.current_question_number = 14
+        self.current_question_number = 43
 
     def log(self, message: str, level: str = "INFO"):
-        """Log with timestamp"""
+        """Log with timestamp, safely handling invalid Unicode characters"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [{level}] {message}")
+        # Replace invalid characters to avoid UnicodeEncodeError
+        safe_message = message.encode("utf-8", errors="replace").decode("utf-8")
+        print(f"[{timestamp}] [{level}] {safe_message}")
 
     def fetch_question_by_number(self, question_num: int) -> Optional[Dict[str, Any]]:
         """Fetch question details by problem number"""
         try:
+            print(f"[DEBUG] About to request: {ALFA_LEETCODE_API}/problems?limit=1&skip={question_num - 1}")
             response = requests.get(
                 f"{ALFA_LEETCODE_API}/problems",
                 params={"limit": 1, "skip": question_num - 1},
                 timeout=REQUEST_TIMEOUT
             )
+            print(f"[DEBUG] Response received: status_code={response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
                 problems = data.get('problemsetQuestionList', [])
                 if problems:
+                    print(f"[DEBUG] Problem found: {problems[0].get('title', 'No title')}")
                     return problems[0]
 
+            print(f"[DEBUG] No problems found or bad status code.")
             return None
 
         except Exception as e:
@@ -85,14 +91,20 @@ class QuestionFetcher:
     def fetch_question_details(self, title_slug: str) -> Optional[Dict[str, Any]]:
         """Fetch detailed information for a single question"""
         try:
+            print(f"[DEBUG] About to request: {ALFA_LEETCODE_API}/select?titleSlug={title_slug}")
             response = requests.get(
                 f"{ALFA_LEETCODE_API}/select",
                 params={"titleSlug": title_slug},
                 timeout=REQUEST_TIMEOUT
             )
+            print(f"[DEBUG] Response received from /select: status_code={response.status_code}")
 
             if response.status_code == 200:
                 return response.json()
+            elif response.status_code == 429:
+                self.log(f"Received 429 Too Many Requests for {title_slug}. Waiting 5 minutes before retrying...", "WARN")
+                time.sleep(300)  # 5 minutes
+                return None
             else:
                 self.log(f"Failed to fetch {title_slug}: HTTP {response.status_code}", "WARN")
                 return None
@@ -101,15 +113,17 @@ class QuestionFetcher:
             self.log(f"Network error fetching {title_slug}: {e}", "WARN")
             return None
         except Exception as e:
-            self.log(f"Unexpected error fetching {title_slug}: {e}", "ERROR")
+            self.log(f"Unexpected error fetching {locals().get('title_slug', '<unknown>')}: {e}", "ERROR")
             return None
 
     def parse_and_save_question(self, problem: Dict[str, Any], detail_data: Dict[str, Any]) -> bool:
         """Parse question data and save to database"""
         try:
             title = problem.get('title', 'Untitled')
+            print(f"[DEBUG] DB URL: {os.environ.get('DATABASE_URL')}")
 
             # Check for duplicates
+            print("[DEBUG] Checking for duplicates in DB...")
             if self.check_if_exists(title):
                 self.log(f"Question '{title}' already exists, skipping", "INFO")
                 self.duplicate_count += 1
@@ -147,19 +161,24 @@ class QuestionFetcher:
                 is_active=True
             )
 
+            print("[DEBUG] Adding question to DB session...")
             self.db.add(question)
+            print("[DEBUG] About to commit to DB...")
             self.db.commit()
+            print("[DEBUG] DB commit successful")
 
             self.log(f"✓ Saved: '{title}' ({difficulty_str}, {len(topics)} topics)")
             self.fetched_count += 1
             return True
 
         except IntegrityError:
+            print("[DEBUG] IntegrityError encountered, rolling back DB session...")
             self.db.rollback()
             self.log(f"Duplicate detected for '{title}', skipping", "WARN")
             self.duplicate_count += 1
             return True
         except Exception as e:
+            print(f"[DEBUG] Exception encountered: {e}, rolling back DB session...")
             self.db.rollback()
             self.log(f"Error saving question: {e}", "ERROR")
             return False
@@ -167,15 +186,22 @@ class QuestionFetcher:
     def fetch_single_question_with_retry(self, problem: Dict[str, Any]) -> bool:
         """Fetch a single question with retry logic"""
         title_slug = problem.get('titleSlug')
+        if not title_slug:
+            self.log("No titleSlug found in problem, skipping fetch_question_details", "ERROR")
+            self.skipped_count += 1
+            return False
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
+                print(f"[DEBUG] [Attempt {attempt}] About to call fetch_question_details for titleSlug: {title_slug}")
                 # Fetch question details
                 detail_data = self.fetch_question_details(title_slug)
+                print(f"[DEBUG] [Attempt {attempt}] Returned from fetch_question_details for titleSlug: {title_slug}")
 
                 if detail_data:
-
+                    print(f"[DEBUG] [Attempt {attempt}] About to call parse_and_save_question for titleSlug: {title_slug}")
                     success = self.parse_and_save_question(problem, detail_data)
+                    print(f"[DEBUG] [Attempt {attempt}] Returned from parse_and_save_question for titleSlug: {title_slug}, success={success}")
                     if success:
                         return True
 
@@ -220,7 +246,7 @@ class QuestionFetcher:
     def run(self):
         """Main loop - fetch questions continuously"""
         try:
-            self.log("🚀 Starting continuous question fetcher...")
+            self.log("\uD83D\uDE80 Starting continuous question fetcher...")
             self.log(f"Configuration: {DELAY_BETWEEN_QUESTIONS}s delay, {MAX_RETRIES} retries")
 
             if MAX_QUESTIONS:
@@ -264,10 +290,6 @@ class QuestionFetcher:
         except Exception as e:
             self.log(f"Fatal error: {e}", "ERROR")
             self.print_stats()
-        finally:
-            self.db.close()
-            self.log("Database connection closed. Goodbye! 👋", "INFO")
-
 
 if __name__ == "__main__":
     fetcher = QuestionFetcher()
