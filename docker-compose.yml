@@ -38,7 +38,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8003
-      - DATABASE_URL=postgresql+psycopg://postgres:${DB_PASSWORD}@host.docker.internal:5434/peerprep_questions
+      - DATABASE_URL=postgresql+psycopg://postgres:${DB_PASSWORD}@host.docker.internal:5435/peerprep_questions
       - USER_SERVICE_URL=http://user-service:8001
       - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
     expose:
