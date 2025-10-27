@@ -88,4 +88,8 @@ export const questionService = {
   async toggleStatus(id) {
     return fetchJson(`${API_BASE}${id}/toggle-status`, { method: 'PUT', headers: authHeaders() });
   },
+
+  async getTopics() {
+    return fetchJson(`${API_BASE}topics`, { headers: authHeaders() });
+  },
 };
