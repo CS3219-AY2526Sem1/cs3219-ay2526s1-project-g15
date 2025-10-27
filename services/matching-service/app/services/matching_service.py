@@ -55,7 +55,7 @@ class MatchingService:
         
         now = datetime.now(timezone.utc)
 
-        # 1) expire stale pending(s) for this user
+        # Expire stale pending(s) for this user
         timeout_seconds = int(settings.MATCHING_TIMEOUT_SECONDS)
         expiry_cutoff = now - timedelta(seconds=timeout_seconds)
         stale = (
@@ -70,7 +70,7 @@ class MatchingService:
             r.timeout_at = now
             db.add(r)
 
-        # 2) block truly-active pending (still within timeout)
+        # Block truly-active pending (still within timeout)
         active_pending = (
           db.query(MatchRequest)
             .filter(MatchRequest.user_id == user_id,
