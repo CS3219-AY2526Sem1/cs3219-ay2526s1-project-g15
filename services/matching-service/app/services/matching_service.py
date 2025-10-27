@@ -9,6 +9,7 @@ from app.utils.matching_queue import matching_queue
 from datetime import datetime, timezone
 import uuid
 from typing import Optional, Union
+from datetime import datetime, timedelta, timezone
 
 class MatchingService:
     
@@ -52,15 +53,34 @@ class MatchingService:
     ) -> MatchRequest:
         """Create a new match request and add to queue"""
         
-        # Check if user already has pending request
-        existing = db.query(MatchRequest).filter(
-            MatchRequest.user_id == user_id,
-            MatchRequest.status == MatchStatus.PENDING
-        ).first()
-        
-        if existing:
-            raise ValueError("User already has a pending match request")
-        
+        now = datetime.now(timezone.utc)
+
+        # Expire stale pending(s) for this user
+        timeout_seconds = int(settings.MATCHING_TIMEOUT_SECONDS)
+        expiry_cutoff = now - timedelta(seconds=timeout_seconds)
+        stale = (
+          db.query(MatchRequest)
+            .filter(MatchRequest.user_id == user_id,
+                    MatchRequest.status == MatchStatus.PENDING,
+                    MatchRequest.created_at < expiry_cutoff)
+            .all()
+        )
+        for r in stale:
+            r.status = MatchStatus.TIMEOUT
+            r.timeout_at = now
+            db.add(r)
+
+        # Block truly-active pending (still within timeout)
+        active_pending = (
+          db.query(MatchRequest)
+            .filter(MatchRequest.user_id == user_id,
+                    MatchRequest.status == MatchStatus.PENDING,
+                    MatchRequest.created_at >= expiry_cutoff)
+            .first()
+        )
+        if active_pending:
+            raise ValueError("You already have a pending request.")
+                
         # Create match request
         request_id = str(uuid.uuid4())
         match_request = MatchRequest(
@@ -68,7 +88,8 @@ class MatchingService:
             user_id=user_id,
             difficulty=difficulty,
             topic=topic,
-            status=MatchStatus.PENDING
+            status=MatchStatus.PENDING,
+            created_at=now
         )
         
         db.add(match_request)
@@ -228,7 +249,6 @@ class MatchingService:
             match.confirmed_at = datetime.now(timezone.utc)
             collaboration_id = str(uuid.uuid4())
             match.session_id = collaboration_id
-            # Call collaboration service to create session (?)
         
         db.commit()
         db.refresh(match)

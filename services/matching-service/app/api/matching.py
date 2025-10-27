@@ -1,6 +1,8 @@
-from typing import Union
+import asyncio
+import uuid, time
+from typing import Union, Optional, Dict
 from jose import jwt, JWTError, ExpiredSignatureError
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
@@ -17,61 +19,12 @@ from app.schemas.matching import (
 from app.services.matching_service import matching_service
 from app.models.match_request import MatchRequest, MatchStatus
 from app.models.match import Match
-from typing import Dict
-import asyncio
+from app.clients.question_client import QuestionClient
+from shared.messaging.rabbitmq_client import RabbitMQClient
 
 router = APIRouter()
-
-# Debugging:
-# @router.get("/ping")
-# async def ping():
-#     return {"ok": True}
-
-# @router.get("/debug/whoami")
-# def whoami(user: dict = Depends(verify_token)):
-#     return user  # {"user_id": "..."}
-
-# @router.get("/debug/my-requests")
-# def debug_my_requests(user: dict = Depends(verify_token), db: Session = Depends(get_db)):
-#     from app.models.match_request import MatchRequest, MatchStatus
-#     rows = db.query(MatchRequest).filter(
-#         MatchRequest.user_id == user["user_id"],
-#         MatchRequest.status == MatchStatus.PENDING,
-#     ).all()
-#     return [{k: v for k, v in r.__dict__.items() if k != "_sa_instance_state"} for r in rows]
-
-# @router.get("/debug/matches")
-# def debug_list_matches(db: Session = Depends(get_db)):
-#     from app.models.match import Match
-#     rows = db.query(Match).all()
-#     return [{k: v for k, v in m.__dict__.items() if k != "_sa_instance_state"} for m in rows]
-
-# @router.get("/debug/my-requests")
-# def debug_my_requests(user: dict = Depends(verify_token), db: Session = Depends(get_db)):
-#     from app.models.match_request import MatchRequest
-#     rows = db.query(MatchRequest).filter(MatchRequest.user_id == user["user_id"]).all()
-#     return [{k: v for k, v in r.__dict__.items() if k != "_sa_instance_state"} for r in rows]
-
-# @router.get("/debug/matches")
-# def debug_list_matches(db: Session = Depends(get_db)):
-#     from app.models.match import Match
-#     rows = db.query(Match).all()
-#     return [{k:v for k,v in m.__dict__.items() if k != "_sa_instance_state"} for m in rows]
-
-# @router.get("/debug/queue/{difficulty}/{topic}")
-# def debug_queue(difficulty: str, topic: str):
-#     # peek into Redis queue
-#     from app.utils.matching_queue import matching_queue
-#     size = matching_queue.get_queue_size(difficulty, topic)
-#     # raw view (optional)
-#     try:
-#         import redis, json
-#         r = matching_queue.redis_client
-#         key = f"matching_queue:{difficulty}:{topic}"
-#         members = r.zrange(key, 0, -1, withscores=True)
-#         return {"size": size, "members": [{"data": json.loads(m), "score": s} for m, s in members]}
-#     except Exception as e:
-#         return {"size": size, "error": str(e)}
+qclient = QuestionClient()
+rabbit = RabbitMQClient()
 
 # WebSocket connection manager for real-time updates
 class MatchingConnectionManager:
@@ -296,23 +249,59 @@ async def confirm_match(
             }
 
         match = result
-        # If both confirmed, return session details
-        if match.user1_confirmed and match.user2_confirmed:
-            # Call collaboration service and question service to set up the session
-            
-            partner_id = match.user2_id if match.user1_id == user["user_id"] else match.user1_id
-            
-            return MatchConfirmedResponse(
-                match_id=match.id,
-                session_id=match.session_id or "pending",
-                question_id="TBD",  # Get from question service
-                partner_id=partner_id
-            )
-        else:
+
+        if not (match.user1_confirmed and match.user2_confirmed):
             raise HTTPException(
                 status_code=202,
                 detail="Waiting for partner confirmation"
             )
+        
+        # If both confirmed
+        # 1) Pick a question from QS using difficulty/topic stored on the match
+        difficulty_val = match.difficulty.value if hasattr(match.difficulty, "value") else match.difficulty
+        qs_difficulty  = difficulty_val.lower()
+        topic_val = match.topic
+        question = await qclient.pick_question(difficulty=qs_difficulty, topics=[topic_val])
+
+        # 2) Ensure we have a session_id; generate & persist if missing
+        if not match.session_id:
+            match.session_id = str(uuid.uuid4())
+            db.add(match)
+            db.commit()
+            db.refresh(match)
+
+        # 3) Publish match.found
+        await rabbit.connect()
+        payload = {
+            "event_type": "match.found",
+            "version": 1,
+            "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "session_id": match.session_id,
+            "question": {
+                "id": question["id"],
+                "difficulty": question.get("difficulty"),
+                "topics": question.get("topics", []),
+                "title": question.get("title", "Untitled")
+            },
+            "users": [
+                {"user_id": match.user1_id},
+                {"user_id": match.user2_id}
+            ],
+        }
+        await rabbit.publish_message(
+            exchange="matching.events",
+            routing_key="match.found",
+            message=payload
+        )
+
+        # 4) Build response to caller
+        partner_id = match.user2_id if match.user1_id == user["user_id"] else match.user1_id
+        return MatchConfirmedResponse(
+            match_id=match.id,
+            session_id=match.session_id,
+            question_id=str(question["id"]),
+            partner_id=partner_id
+        )            
             
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

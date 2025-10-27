@@ -1,31 +1,33 @@
+# app/core/auth.py
+from typing import Optional, Dict
+import os, requests
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError, ExpiredSignatureError
-from app.core.config import settings
-from fastapi import Depends, HTTPException, status
 
-bearer = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=True)
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8001").rstrip("/")
+USER_SERVICE_VERIFY_PATH = os.getenv("USER_SERVICE_VERIFY_PATH", "/users/me")
+TIMEOUT = float(os.getenv("AUTH_HTTP_TIMEOUT", "5"))
 
-def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
-    token = creds.credentials
+def _verify_with_user_service(token: str) -> Optional[Dict]:
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"{USER_SERVICE_URL}{USER_SERVICE_VERIFY_PATH}"
     try:
-        claims = jwt.decode(
-            token,
-            settings.AUTH_ACCESS_SECRET,
-            algorithms=[settings.AUTH_ALGORITHM],
-            issuer=settings.AUTH_ISSUER,
-            options={"verify_aud": bool(settings.AUTH_AUDIENCE)},
-            audience=settings.AUTH_AUDIENCE,
-        )
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        r = requests.get(url, headers=headers, timeout=TIMEOUT)
+        if r.status_code == 200:
+            data = r.json() or {}
+            # user-service /users/me returns `id`, so accept that
+            uid = data.get("user_id") or data.get("sub") or data.get("id")
+            if uid:
+                return {"user_id": uid}
+        elif r.status_code in (401, 403):
+            return None
+    except requests.RequestException as e:
+        print(f"[auth] user-service error: {e}")
+    return None
 
-    if claims.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Wrong token type")
-
-    user_id = claims.get("sub")  # user-service sets sub = user id
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token missing user id")
-
-    return {"user_id": user_id, "claims": claims}
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    user = _verify_with_user_service(credentials.credentials)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token", headers={"WWW-Authenticate":"Bearer"})
+    return user
