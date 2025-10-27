@@ -10,20 +10,6 @@ const DIFFICULTIES = [
   { label: "Difficult", value: "hard" }
 ];
 
-const TOPICS = [
-  "Arrays",
-  "Strings",
-  "Linked Lists",
-  "Trees",
-  "Graphs",
-  "Greedy",
-  "Dynamic Programming",
-  "Math",
-  "Hash Table",
-  "Sorting",
-  "Binary Search",
-];
-
 export default function EditQuestion() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -33,6 +19,9 @@ export default function EditQuestion() {
   const [errors, setErrors] = useState({});
   const [tagInput, setTagInput] = useState("");
   const [customTopicInput, setCustomTopicInput] = useState("");
+
+  const [topics, setTopics] = useState([]);
+  const [loadingTopics, setLoadingTopics] = useState(true);
 
   const [form, setForm] = useState({
     title: "",
@@ -44,6 +33,23 @@ export default function EditQuestion() {
     examples: [{ input: "", output: "", explanation: "" }],
     testCases: [{ input: "", output: "" }],
   });
+
+  // Fetch topics
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const fetchedTopics = await questionService.getTopics();
+        setTopics(fetchedTopics);
+      } catch (err) {
+        console.error("Failed to fetch topics:", err);
+        setErrors(prev => ({ ...prev, topicsFetch: "Failed to load topics. Please refresh the page." }));
+      } finally {
+        setLoadingTopics(false);
+      }
+    };
+
+    fetchTopics();
+  }, []);
 
   // Load question from backend
   useEffect(() => {
@@ -164,7 +170,7 @@ export default function EditQuestion() {
     setSubmitting(true);
 
     try {
-      // Parse test cases - convert string inputs to JSON objects
+      // convert string inputs to JSON objects
       const parsedTestCases = form.testCases
         .filter(tc => tc.input.trim() && tc.output.trim())
         .map((tc, idx) => {
@@ -197,7 +203,7 @@ export default function EditQuestion() {
       
       await questionService.updateQuestion(id, questionData);
       
-      // Success - navigate back
+      // navigate back if successful
       navigate("/admin/home");
     } catch (err) {
       console.error("Failed to update question:", err);
@@ -307,23 +313,33 @@ export default function EditQuestion() {
                   <label className="block text-sm font-medium text-gray-800 mb-1">
                     Topics * (select at least one)
                   </label>
-                  <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
-                    {TOPICS.map((topic) => (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => toggleTopic(topic)}
-                        disabled={submitting}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                          form.topics.includes(topic)
-                            ? "bg-[#4A53A7] text-white"
-                            : "bg-white text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        {topic}
-                      </button>
-                    ))}
-                  </div>
+                  {loadingTopics ? (
+                    <div className="p-3 rounded-xl bg-gray-100 text-center text-sm text-gray-600">
+                      Loading topics...
+                    </div>
+                  ) : errors.topicsFetch ? (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                      <p className="text-sm text-red-800">{errors.topicsFetch}</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
+                      {topics.map((topic) => (
+                        <button
+                          key={topic}
+                          type="button"
+                          onClick={() => toggleTopic(topic)}
+                          disabled={submitting}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                            form.topics.includes(topic)
+                              ? "bg-[#4A53A7] text-white"
+                              : "bg-white text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {errors.topics && <p className="text-sm text-red-600 mt-1">{errors.topics}</p>}
                 </div>
 

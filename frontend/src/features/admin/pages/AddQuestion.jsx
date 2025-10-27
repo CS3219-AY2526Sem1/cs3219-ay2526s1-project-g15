@@ -1,31 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
 import { questionService } from "../../../shared/api/questionService";
 
-// Backend expects: "easy", "medium", "hard" (lowercase)
+// Backend expects lowercase "easy", "medium", "hard" 
 const DIFFICULTIES = [
   { label: "Easy", value: "easy" },
   { label: "Medium", value: "medium" },
   { label: "Difficult", value: "hard" }
 ];
 
-const TOPICS = [
-  "Arrays",
-  "Strings",
-  "Linked Lists",
-  "Trees",
-  "Graphs",
-  "Greedy",
-  "Dynamic Programming",
-  "Math",
-  "Hash Table",
-  "Sorting",
-  "Binary Search",
-];
-
 export default function AddQuestion() {
   const navigate = useNavigate();
+
+  const [topics, setTopics] = useState([]);
+  const [loadingTopics, setLoadingTopics] = useState(true);
 
   const [form, setForm] = useState({
     title: "",
@@ -39,6 +28,23 @@ export default function AddQuestion() {
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Fetch topics 
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const fetchedTopics = await questionService.getTopics();
+        setTopics(fetchedTopics);
+      } catch (err) {
+        console.error("Failed to fetch topics:", err);
+        setErrors(prev => ({ ...prev, topicsFetch: "Failed to load topics. Please refresh the page." }));
+      } finally {
+        setLoadingTopics(false);
+      }
+    };
+
+    fetchTopics();
+  }, []);
 
   const setField = (key, val) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -99,6 +105,11 @@ export default function AddQuestion() {
     if (!form.description.trim()) e.description = "Description is required.";
     if (!form.difficulty) e.difficulty = "Choose a difficulty.";
     if (form.topics.length === 0) e.topics = "Select at least one topic.";
+    
+    // Check if there's at least one non-empty test case
+    const hasValidTestCase = form.testCases.some(tc => tc.input.trim() && tc.output.trim());
+    if (!hasValidTestCase) e.testCases = "At least one test case with input and output is required.";
+    
     return e;
   };
 
@@ -113,7 +124,7 @@ export default function AddQuestion() {
     setSubmitting(true);
 
     try {
-      // Parse test cases - convert string inputs to JSON objects
+      // convert string inputs to JSON objects
       const parsedTestCases = form.testCases
         .filter(tc => tc.input.trim() && tc.output.trim())
         .map((tc, idx) => {
@@ -241,28 +252,38 @@ export default function AddQuestion() {
                 )}
               </div>
 
-              {/* Topics (Multi-select) */}
+              {/* Topics */}
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">
                   Topics * (select at least one)
                 </label>
-                <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
-                  {TOPICS.map((topic) => (
-                    <button
-                      key={topic}
-                      type="button"
-                      onClick={() => toggleTopic(topic)}
-                      disabled={submitting}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                        form.topics.includes(topic)
-                          ? "bg-[#4A53A7] text-white"
-                          : "bg-white text-gray-700 hover:bg-gray-200"
-                      }`}
-                    >
-                      {topic}
-                    </button>
-                  ))}
-                </div>
+                {loadingTopics ? (
+                  <div className="p-3 rounded-xl bg-gray-100 text-center text-sm text-gray-600">
+                    Loading topics...
+                  </div>
+                ) : errors.topicsFetch ? (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                    <p className="text-sm text-red-800">{errors.topicsFetch}</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
+                    {topics.map((topic) => (
+                      <button
+                        key={topic}
+                        type="button"
+                        onClick={() => toggleTopic(topic)}
+                        disabled={submitting}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                          form.topics.includes(topic)
+                            ? "bg-[#4A53A7] text-white"
+                            : "bg-white text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {topic}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {errors.topics && (
                   <p className="text-sm text-red-600 mt-1">{errors.topics}</p>
                 )}
@@ -337,7 +358,7 @@ export default function AddQuestion() {
               {/* Test Cases */}
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-2">
-                  Test Cases
+                  Test Cases *
                 </label>
                 <p className="text-xs text-gray-600 mb-3">
                   Enter test cases in JSON format (recommended) or as plain text.
@@ -377,6 +398,7 @@ export default function AddQuestion() {
                     </div>
                   ))}
                 </div>
+                {errors.testCases && <p className="text-sm text-red-600 mt-1">{errors.testCases}</p>}
                 <button
                   type="button"
                   onClick={onAddTestCase}
