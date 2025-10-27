@@ -38,7 +38,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8003
-      - DATABASE_URL=postgresql+psycopg://postgres:${DB_PASSWORD}@host.docker.internal:5434/peerprep_questions
+      - DATABASE_URL=postgresql+psycopg://postgres:${DB_PASSWORD}@host.docker.internal:5435/peerprep_questions
       - USER_SERVICE_URL=http://user-service:8001
       - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
     expose:
@@ -64,8 +64,15 @@ services:
       - AUTH_ALGORITHM=HS256
       - LOG_LEVEL=INFO
       - MATCHING_TIMEOUT_SECONDS=60
+      - USER_SERVICE_URL=http://user-service:8001
+      - QUESTION_SERVICE_URL=http://question-service:8003
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672/
     expose:
       - "8002"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./shared:/app/shared
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,7 +125,8 @@ services:
     ports:
       - "6380:6379"
     networks: [appnet]
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
+    command: ["redis-server", "--loglevel", "warning"]
+    # command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -128,8 +136,8 @@ services:
       - RABBITMQ_DEFAULT_PASS=password
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error},{default,info}] disk_free_limit 2147483648
     ports:
-      - "5672:5672"     # AMQP port
-      - "15672:15672"   # Management UI port
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI port
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
