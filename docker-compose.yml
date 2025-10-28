@@ -29,6 +29,8 @@ services:
       - REFRESH_TTL_DAYS=7
     expose:
       - "8001"
+    ports:
+      - "8001:8001"  
     networks: [appnet]
 
   question-service:
@@ -90,6 +92,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://collaboration_user:collabpass@postgres:5432/peerprep_collaboration
       - REDIS_URL=redis://redis:6379/0
       - USER_SERVICE_URL=http://user-service:8001
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - QUEUE_NAME=collaboration_events
     expose:
       - "8004"
     depends_on:
@@ -97,6 +101,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks: [appnet]
     command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
 
