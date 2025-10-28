@@ -4,10 +4,22 @@ import json
 import aiohttp
 import redis.asyncio as redis
 import os
+from app.api.websocket import broadcast_to_session
 
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://admin:admin@rabbitmq/")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://admin:password@rabbitmq/")
 QUESTION_SERVICE_URL = os.getenv("QUESTION_SERVICE_URL", "http://question-service:8003")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8001")
+
+async def notify_session_ready(session_id, user_ids):
+    for uid in user_ids:
+        await broadcast_to_session(
+            session_id,
+            {
+                "type": "session_ready",
+                "session_id": session_id
+            },
+            exclude_user_id=None
+        )
 
 async def handle_session_created(payload):
     match_id = payload["match_id"]
@@ -32,7 +44,8 @@ async def handle_session_created(payload):
     }
 
     await redis_client.set(session_id, json.dumps(session_data))
-    print(f"💾 Stored session {session_id} in Redis")
+
+    await notify_session_ready(session_id, partner_id)
 
 async def consume_matching_events():
     connection = await aio_pika.connect_robust(RABBITMQ_URL)
@@ -47,7 +60,6 @@ async def consume_matching_events():
         async for message in queue_iter:
             async with message.process():
                 payload = json.loads(message.body)
-                print(f"📩 Received session_created: {payload}")
                 await handle_session_created(payload)
 
 if __name__ == "__main__":

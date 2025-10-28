@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from collections import defaultdict
 import asyncio
+import redis.asyncio as redis
 
 router = APIRouter()
 
@@ -106,6 +107,7 @@ async def broadcast_to_session(
             if user_data["websocket"] == ws:
                 session.remove_user(user_id)
 
+redis_client = redis.from_url("redis://redis:6379/0")
 
 @router.websocket("/ws/session/active/{session_id}")
 async def websocket_endpoint(
@@ -128,18 +130,31 @@ async def websocket_endpoint(
     await websocket.accept()
     print(f"{username or user_id} connecting to session {session_id}")
     
-    # Create or get session
-    if session_id not in active_sessions:
-        active_sessions[session_id] = Session(session_id)
-    
-    session = active_sessions[session_id]
+    # Try to load session from active_sessions
+    session = active_sessions.get(session_id)
+
+    if not session:
+        # Check Redis if session exists
+        session_data = await redis_client.get(session_id)
+        if session_data:
+            session_data = json.loads(session_data)
+            session = Session(session_id=session_id, question_id=session_data["question"]["id"])
+            session.code = session_data.get("code", "")
+            session.language = session_data.get("language", "python")
+            active_sessions[session_id] = session
+        else:
+            # Session not found anywhere, error
+            await websocket.send_json({"type": "error", "message": "Session not ready"})
+            await websocket.close()
+            return
+
+    # Add user
     session.add_user(user_id, websocket, username)
-    
-    # Send current state immediately
+
+    # Send current state
     await websocket.send_json({
         "type": "session_state",
-        "data": session.get_state(),
-        "timestamp": datetime.utcnow().isoformat()
+        "data": session.get_state()
     })
     
     # Notify others
