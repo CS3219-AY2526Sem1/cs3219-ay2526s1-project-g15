@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import ProblemPanel from "../components/ProblemPanel";
 import CodeEditor from "../../../shared/components/CodeEditor";
 import useCollaborationSocket from "../hooks/useCollaborationSocket";
 import { buildHarness } from "../../../shared/utils/HarnessBuilders";
+import { me } from "../../auth/api";
 
 // language mapping for Piston API
 const LANGUAGE_MAP = {
@@ -102,13 +103,23 @@ class Builders {
 };
 
 
+
 export default function Room() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
-  const [searchParams] = useSearchParams();
-  const userId = searchParams.get("user_id") || crypto.randomUUID();
-  const username = searchParams.get("username") || "Guest";
 
+  const [userId, setUserId] = useState(null);
+  const [username, setUsername] = useState("Guest");
+
+  useEffect(() => {
+    me().then((user) => {
+      setUserId(user.id);
+      setUsername(user.name || "Guest");
+    }).catch((err) => {
+      console.log("Failed to fetch user info:", err);  
+    });
+  }, []);
+  
   // TODO: change based on the question from backend
   const [code, setCode] = useState(`// Write your solution here
 function hasCycle(head){
