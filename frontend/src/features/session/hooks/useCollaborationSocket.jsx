@@ -2,29 +2,29 @@ import { useEffect, useRef, useState } from "react";
 
 export default function useCollaborationSocket(sessionId, userId, username) {
   const [socketReady, setSocketReady] = useState(false);
-  const [sessionState, setSessionState] = useState(null);
+  const [sessionState, setSessionState] = useState("preparing");
   const socketRef = useRef(null);
 
   useEffect(() => {
     console.log("useCollaborationSocket effect running", sessionId, userId, username);
     if (!sessionId || !userId) return;
 
-    const wsUrl = `ws://localhost:8003/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
+    const wsUrl = `ws://localhost:8004/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
     socket.onopen = () => {
       console.log("Connected to WebSocket");
       setSocketReady(true);
-    };
+    }
 
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log("Received:", message);
+      console.log("Received:", message, message.status);
 
       switch (message.type) {
         case "session_state":
-            setSessionState(message.data);
+            setSessionState(message.data? "ready" : "preparing");
             break;
         case "code_update":
             setSessionState(prev => ({

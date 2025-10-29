@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
 from app.core.config import settings
+from app.core.redis import get_redis_client
 from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
@@ -21,6 +22,7 @@ from app.models.match_request import MatchRequest, MatchStatus
 from app.models.match import Match
 from app.clients.question_client import QuestionClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
+import json
 
 router = APIRouter()
 qclient = QuestionClient()
@@ -270,7 +272,24 @@ async def confirm_match(
             db.commit()
             db.refresh(match)
 
-        # 3) Publish match.found
+        # 3) Initialize collaboration session in Redis
+        redis_client = await get_redis_client()
+        await redis_client.set(
+            match.session_id,
+            json.dumps({
+                "question": {
+                    "id": question["id"],
+                    "difficulty": question.get("difficulty"),
+                    "topics": question.get("topics", []),
+                    "title": question.get("title", "Untitled")
+                },
+                "code": "",
+                "language": "python",
+                "users": [match.user1_id, match.user2_id],
+            })
+        )
+
+        # 4) Publish match.found
         await rabbit.connect()
         payload = {
             "event_type": "match.found",
@@ -283,10 +302,7 @@ async def confirm_match(
                 "topics": question.get("topics", []),
                 "title": question.get("title", "Untitled")
             },
-            "users": [
-                {"user_id": match.user1_id},
-                {"user_id": match.user2_id}
-            ],
+            "users": [match.user1_id, match.user2_id]
         }
         await rabbit.publish_message(
             exchange="matching.events",
@@ -294,7 +310,7 @@ async def confirm_match(
             message=payload
         )
 
-        # 4) Build response to caller
+        # 5) Build response to caller
         partner_id = match.user2_id if match.user1_id == user["user_id"] else match.user1_id
         return MatchConfirmedResponse(
             match_id=match.id,

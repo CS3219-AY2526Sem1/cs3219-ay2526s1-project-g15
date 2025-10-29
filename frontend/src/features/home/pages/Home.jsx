@@ -1,9 +1,13 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, use } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../components/OngoingMeetingCard";
 import DifficultyPicker from "../components/DifficultyPicker";
 import TopicSelect from "../components/TopicSelect";
+import SessionLoading from "../components/SessionLoading";
+import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
+import { me } from "../../auth/api";
+import { createMatchRequest, getMatchRequestStatus, cancelMatchRequest, confirmMatch as confirmMatchApi } from "../../../shared/api/matchingService";
 
 const COMPLETED_TOPICS = ["Arrays", "Graphs"];
 
@@ -11,11 +15,28 @@ export default function Home() {
   // toggle to demo the sidebar
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [difficulty, setDifficulty] = useState("Medium");
+  const [userId, setUserId] = useState(null);
+  const [username, setUsername] = useState("Guest");
+  const token = localStorage.getItem("accessToken");
+  const [reqId, setReqId] = useState(null);
+  const [matchId, setMatchId] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [questionId, setQuestionId] = useState(null);
+
   const navigate = useNavigate();
+
+  useEffect(() => {
+    me()
+      .then((user) => {
+        setUserId(user.id);
+        setUsername(user.name || "Guest");
+      })
+      .catch(console.error);
+  }, []);
 
   // TODO: fetch from backend
   const topics = useMemo(
-    () => ["Arrays", "Strings", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Math"],
+    () => ["Array", "String", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Math"],
     []
   );
   const completedTopics = COMPLETED_TOPICS;
@@ -43,7 +64,7 @@ export default function Home() {
   const [status, setStatus] = useState("idle");
   // const timer = useRef(null);
 
-  // timout: after 60s
+  // timeout: after 60s
   const SEARCH_TIMEOUT_MS = 60_000;
   // check every 1.5s if there is a match
   const POLL_INTERVAL_MS = 1500;
@@ -64,16 +85,33 @@ export default function Home() {
       setStatus("no_match");
     }, SEARCH_TIMEOUT_MS);
 
+
+
     // TODO: Connect to backend to see if a match has been found
     // poll for a match until timeout
-    pollRef.current = setInterval(() => {
-      const found = Math.random() < 0.25;
-      if (found) {
-        clearTimeout(timeoutRef.current);
-        clearInterval(pollRef.current);
-        setStatus("found");
-      }
-    }, POLL_INTERVAL_MS);
+    createMatchRequest({ topic, difficulty }, token)
+    .then((request) => {
+      setReqId(request.id);
+      // Poll for its status periodically
+      pollRef.current = setInterval(() => {
+        getMatchRequestStatus(request.id, token)
+          .then((statusRes) => {
+            if (statusRes.status === "matched") {
+              setMatchId(statusRes.match_id);
+              clearTimeout(timeoutRef.current);
+              clearInterval(pollRef.current);
+              setStatus("found");
+            }
+          })
+          .catch((err) => {
+            console.error("Error during match polling:", err);
+          });
+      }, POLL_INTERVAL_MS);
+    })
+    .catch((err) => {
+      console.error("Error creating match request:", err);
+      setStatus("no_match");
+    });
   };
 
   const cancelSearch = () => {
@@ -90,16 +128,63 @@ export default function Home() {
   }, []);
 
   // TODO: confirm match logic: navigate user to the correct meeting room
-  const confirmMatch = () => {
-    // stop timers
-    clearTimeout(timeoutRef?.current);
-    clearInterval(pollRef?.current);
     
-    // temporary session and user details (replaced with response from matching service)
-    const tempSessionId = "session123";
+  const confirmMatch = async () => {
+    try {
+      setStatus("confirming_match");
 
-    navigate(`/session/active/${tempSessionId}`);
+      const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
+      
+      if (res.detail === "Waiting for partner confirmation") {
+        // stay in preparing state
+        setStatus("waiting_for_partner");
+        return;
+      }
+
+      if (res.session_id) {
+        setSessionId(res.session_id);
+        setQuestionId(res.question_id);
+        setStatus("preparing_session");
+      } else {
+        console.warn("Unexpected response from confirm API:", res);
+      }
+    } catch (err) {
+      console.error("Error confirming match:", err);
+      setStatus("error");
+    }
   };
+
+  useEffect(() => {
+    let interval;
+
+    if (status === "waiting_for_partner") {
+      interval = setInterval(async () => {
+        const reqRes = await getMatchRequestStatus(reqId, token);
+        if (reqRes.status === "matched") {
+          const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
+          setSessionId(res.session_id);
+          setQuestionId(res.question_id);
+          setStatus("preparing_session");
+        }
+      }, 2000); // every 2s
+    }
+
+    return () => clearInterval(interval);
+  }, [status, matchId, token]);
+
+  // connect WebSocket once preparing
+  const { socketReady, sessionState } = useCollaborationSocket(
+    status === "preparing_session" ? sessionId : sessionId,
+    userId,
+    username
+  );  
+
+  // auto-navigate once session is ready
+  useEffect(() => {
+    if (sessionState === "ready") {
+      navigate(`/session/active/${sessionId}`);
+    }
+  }, [sessionState, navigate, sessionId]);
 
   const retry = () => startSearch();
 
@@ -237,8 +322,34 @@ export default function Home() {
                 </button>
               </div>
             )}
+
+            {/* Preparing session */}
+            {status === "waiting_for_partner" && (
+              <div className="h-[420px] w-full flex flex-col items-center justify-center gap-6">
+                <h2 className="text-xl md:text-2xl font-bold text-[#262D6C]">Wating for partner confirmation...</h2>
+
+                <div className="relative h-24 w-24">
+                  <div className="absolute inset-0 rounded-full border-8 border-gray-200/70" />
+                  <div
+                    className="absolute inset-0 rounded-full border-8 border-[#4A53A7]
+                               border-t-transparent border-r-transparent animate-spin"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Preparing session */}
+            {status === "preparing_session" && (
+              <SessionLoading
+                sessionId={sessionId}
+                userId={userId}
+                username={username}
+                onReady={() => navigate(`/session/active/${sessionId}`)}
+              />
+            )}
           </section>
         </div>
+
 
         {/* TODO: remove this once logic for whether or not there is an ongoing meeting is up */}
         <div className="mt-6 text-sm text-gray-600">
