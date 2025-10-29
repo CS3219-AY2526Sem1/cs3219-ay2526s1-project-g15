@@ -11,3 +11,10 @@ python-jose[cryptography]==3.3.0
 
 # HTTP client
 httpx==0.25.2
+
+aio-pika
+psycopg[binary]  # if using psycopg
+asyncpg
+aiohttp==3.9.5
+redis==5.0.1
+SQLAlchemy==2.0.23
