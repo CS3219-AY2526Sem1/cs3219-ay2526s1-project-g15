@@ -244,12 +244,6 @@ class MatchingService:
         else:
             raise ValueError("User not part of this match")
         
-        # If both confirmed, create collaboration session
-        if match.user1_confirmed and match.user2_confirmed:
-            match.confirmed_at = datetime.now(timezone.utc)
-            collaboration_id = str(uuid.uuid4())
-            match.session_id = collaboration_id
-        
         db.commit()
         db.refresh(match)
         

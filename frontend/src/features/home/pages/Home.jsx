@@ -7,7 +7,7 @@ import TopicSelect from "../components/TopicSelect";
 import SessionLoading from "../components/SessionLoading";
 import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
 import { me } from "../../auth/api";
-import { createMatchRequest, getMatchRequestStatus, cancelMatchRequest, confirmMatch as confirmMatchApi } from "../../../shared/api/matchingService";
+import { createMatchRequest, getMatchRequestStatus, cancelMatchRequest, confirmMatch as confirmMatchApi, getMatchStatus, getSessionDetails } from "../../../shared/api/matchingService";
 
 const COMPLETED_TOPICS = ["Arrays", "Graphs"];
 
@@ -131,6 +131,7 @@ export default function Home() {
     
   const confirmMatch = async () => {
     try {
+      console.log("Confirming match:", matchId);
       setStatus("confirming_match");
 
       const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
@@ -159,11 +160,23 @@ export default function Home() {
 
     if (status === "waiting_for_partner") {
       interval = setInterval(async () => {
-          const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
-          if (res.session_id) {
-            setSessionId(res.session_id);
-            setQuestionId(res.question_id);
-            setStatus("preparing_session");
+          try {
+            const res = await getMatchStatus(matchId, token);
+            console.log(matchId);
+            console.log(res.confirm_status, res.session_id);
+            
+            if (res.session_id) {
+              console.log("Partner confirmed");
+              setSessionId(res.session_id);
+              const session_details = getSessionDetails(res.session_id, token);
+              setQuestionId(session_details.question.id);
+              setStatus("preparing_session");
+            } else {
+              // Still waiting for the backend to generate session_id
+              console.log("Session not yet created, polling...");
+            }
+          } catch (err) {
+            console.error("Error fetching match status:", err);
           }
         }, 2000); // every 2s
     }

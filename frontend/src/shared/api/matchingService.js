@@ -68,6 +68,42 @@ export async function confirmMatch(data, token) {
 }
 
 /**
+ * Get the status of a match
+ * @param {string} matchId
+ * @param {string} token - JWT access token
+ * @returns {Promise<{confirm_status: boolean, session_id: string | "Not created"}>}
+ */
+export async function getMatchStatus(matchId, token) {
+  const res = await fetch(`${BASE_URL}/${matchId}/status`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+
+  return res.json(); 
+  // Example response:
+  // { confirm_status: true, session_id: "e5aa6c95-f06b-46aa-991a-ea98c624d825" }
+}
+
+
+/**
+ * Get collaboration session details by session_id
+ * @param {string} sessionId
+ * @param {string} token - JWT access token
+ */
+export async function getSessionDetails(sessionId, token) {
+  const res = await fetch(`${BASE_URL}/session/${sessionId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
  * Open WebSocket connection for real-time updates
  * @param {string} token - JWT access token
  * @param {(msg: any) => void} onMessage - callback for messages
@@ -92,3 +128,4 @@ export function connectMatchingWebSocket(token, onMessage) {
 
   return ws;
 }
+
