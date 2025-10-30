@@ -159,14 +159,13 @@ export default function Home() {
 
     if (status === "waiting_for_partner") {
       interval = setInterval(async () => {
-        const reqRes = await getMatchRequestStatus(reqId, token);
-        if (reqRes.status === "matched") {
           const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
-          setSessionId(res.session_id);
-          setQuestionId(res.question_id);
-          setStatus("preparing_session");
-        }
-      }, 2000); // every 2s
+          if (res.session_id) {
+            setSessionId(res.session_id);
+            setQuestionId(res.question_id);
+            setStatus("preparing_session");
+          }
+        }, 2000); // every 2s
     }
 
     return () => clearInterval(interval);

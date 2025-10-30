@@ -258,36 +258,52 @@ async def confirm_match(
                 detail="Waiting for partner confirmation"
             )
         
+        redis_client = await get_redis_client()
+        pong = await redis_client.ping()
+        print("Redis ping response:", pong) 
         # If both confirmed
         # 1) Pick a question from QS using difficulty/topic stored on the match
-        difficulty_val = match.difficulty.value if hasattr(match.difficulty, "value") else match.difficulty
-        qs_difficulty  = difficulty_val.lower()
-        topic_val = match.topic
-        question = await qclient.pick_question(difficulty=qs_difficulty, topics=[topic_val])
+        if not match.session_id:
+            difficulty_val = match.difficulty.value if hasattr(match.difficulty, "value") else match.difficulty
+            qs_difficulty  = difficulty_val.lower()
+            topic_val = match.topic
+            question = await qclient.pick_question(difficulty=qs_difficulty, topics=[topic_val])
 
         # 2) Ensure we have a session_id; generate & persist if missing
-        if not match.session_id:
             match.session_id = str(uuid.uuid4())
+            question_id = str(question["id"])
+
             db.add(match)
             db.commit()
             db.refresh(match)
 
         # 3) Initialize collaboration session in Redis
-        redis_client = await get_redis_client()
-        await redis_client.set(
-            match.session_id,
-            json.dumps({
-                "question": {
-                    "id": question["id"],
-                    "difficulty": question.get("difficulty"),
-                    "topics": question.get("topics", []),
-                    "title": question.get("title", "Untitled")
-                },
-                "code": "",
-                "language": "python",
-                "users": [match.user1_id, match.user2_id],
-            })
-        )
+            await redis_client.set(
+                match.session_id,
+                json.dumps({
+                    "question": {
+                        "id": question["id"],
+                        "difficulty": question.get("difficulty"),
+                        "topics": question.get("topics", []),
+                        "title": question.get("title", "Untitled")
+                    },
+                    "code": "",
+                    "language": "python",
+                    "users": [match.user1_id, match.user2_id],
+                })
+            )
+            data = await redis_client.get(match.session_id)
+            print("Session data stored in Redis:", data)
+
+        else:
+            # Session already exists → retrieve existing question
+            existing_session = await redis_client.get(match.session_id)
+            if not existing_session:
+                raise HTTPException(status_code=500, detail="Session exists in DB but not in Redis")
+
+            session_data = json.loads(existing_session)
+            question = session_data["question"]
+            question_id = str(question["id"])
 
         # 4) Publish match.found
         await rabbit.connect()
@@ -297,7 +313,7 @@ async def confirm_match(
             "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "session_id": match.session_id,
             "question": {
-                "id": question["id"],
+                "id": question_id,
                 "difficulty": question.get("difficulty"),
                 "topics": question.get("topics", []),
                 "title": question.get("title", "Untitled")
