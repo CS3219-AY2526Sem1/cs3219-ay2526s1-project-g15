@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 
 export default function useCollaborationSocket(sessionId, userId, username) {
   const [socketReady, setSocketReady] = useState(false);
-  const [sessionState, setSessionState] = useState("preparing");
+  const [sessionState, setSessionState] = useState({
+    status: "preparing",
+    code: "",
+    notes: "",
+    users: []
+  });
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +29,10 @@ export default function useCollaborationSocket(sessionId, userId, username) {
 
       switch (message.type) {
         case "session_state":
-            setSessionState(message.data? "ready" : "preparing");
+            setSessionState(prev => ({
+              ...prev,
+              status: message.data ? "ready" : "preparing"
+            }));
             break;
         case "code_update":
             setSessionState(prev => ({

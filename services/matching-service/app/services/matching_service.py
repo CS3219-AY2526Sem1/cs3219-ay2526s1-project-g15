@@ -259,7 +259,7 @@ class MatchingService:
         session_id = str(uuid.uuid4())
 
         # Store it in the DB
-        match.session_id = session_id
+        match.collaboration_session_id = session_id
         db.commit()
         db.refresh(match)
 

@@ -259,8 +259,11 @@ async def confirm_match(
         # If not both confirmed yet, just return waiting status
         if not (match.user1_confirmed and match.user2_confirmed):
             return JSONResponse(
-                status_code=202,
-                content={"message": "Waiting for both users to confirm."}
+                status_code=200,
+                content={
+                    "status": "waiting_for_partner",
+                    "match_id": match.id
+                }
             )
 
         redis_client = await get_redis_client()
@@ -344,7 +347,7 @@ async def confirm_match(
         return MatchConfirmedResponse(
             match_id=match.id,
             session_id=session_id,
-            question_id=question.get("id"),
+            question_id=str(question.get("id")),
             partner_id=partner_id
         )
 
@@ -364,7 +367,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
     
-    session_id = getattr(match, "session_id", None)
+    session_id = getattr(match, "collaboration_session_id", None)
     # If session_id exists in DB, check Redis to see if session is fully initialized
     if session_id:
         redis_client = await get_redis_client()

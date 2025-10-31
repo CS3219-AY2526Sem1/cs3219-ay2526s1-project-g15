@@ -136,7 +136,7 @@ export default function Home() {
 
       const res = await confirmMatchApi({ match_id: matchId, confirmed: true }, token);
       
-      if (res.detail === "Waiting for partner confirmation") {
+      if (res.status === "waiting_for_partner") {
         // stay in preparing state
         setStatus("waiting_for_partner");
         return;
@@ -167,7 +167,8 @@ export default function Home() {
             if (res.confirm_status) {
               console.log("Partner confirmed");
               setSessionId(res.session_id);
-              const session_details = getSessionDetails(res.session_id, token);
+              const session_details = await getSessionDetails(res.session_id, token);
+              console.log("Fetched question details:", session_details.question);
               setQuestionId(session_details.question.id);
               setStatus("preparing_session");
             } else {
