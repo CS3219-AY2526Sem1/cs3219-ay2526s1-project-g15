@@ -68,5 +68,6 @@ Thumbs.db
 # Keys
 gcp-keys/
 
-# Local debug tests
+# Local scripts
 tests/
+scripts/truncate_db.py

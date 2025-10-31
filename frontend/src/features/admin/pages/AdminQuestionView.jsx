@@ -94,7 +94,7 @@ export default function AdminQuestionView() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Question Details */}
             <div className="rounded-2xl bg-white p-6 shadow border border-gray-200 h-fit">
-              
+
               {/* Title & Difficulty */}
               <div className="mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 mb-3">
@@ -122,9 +122,10 @@ export default function AdminQuestionView() {
               {/* Description */}
               <div className="mb-6">
                 <h2 className="text-lg font-semibold text-gray-800 mb-2">Description</h2>
-                <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {question.description}
-                </div>
+                <div
+                  className="text-gray-700 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: question.description }}
+                />
               </div>
 
               {/* Examples */}
