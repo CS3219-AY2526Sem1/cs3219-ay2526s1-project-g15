@@ -249,6 +249,23 @@ class MatchingService:
         
         return match
     
+    def create_and_store_session_id(self, db: Session, match_id: str) -> str:
+        """Generates a session ID for a confirmed match and stores it in the DB"""
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise ValueError("Match not found")
+
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+
+        # Store it in the DB
+        match.session_id = session_id
+        db.commit()
+        db.refresh(match)
+
+        return session_id
+
+
     def handle_timeout(self, db: Session, request_id: str):
         """Handle match request timeout"""
         match_request = db.query(MatchRequest).filter(

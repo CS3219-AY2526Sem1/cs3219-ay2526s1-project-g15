@@ -162,10 +162,9 @@ export default function Home() {
       interval = setInterval(async () => {
           try {
             const res = await getMatchStatus(matchId, token);
-            console.log(matchId);
             console.log(res.confirm_status, res.session_id);
             
-            if (res.session_id) {
+            if (res.confirm_status) {
               console.log("Partner confirmed");
               setSessionId(res.session_id);
               const session_details = getSessionDetails(res.session_id, token);
