@@ -311,7 +311,7 @@ function hasCycle(head){
         <div className="mx-auto max-w-6xl px-4 py-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[calc(100vh-56px-32px)]">
             <div className="lg:col-span-1">
-              <ProblemPanel className="h-full" />
+              <ProblemPanel sessionId={sessionId} className="h-full" />
             </div>
 
             <section className="lg:col-span-2 rounded-2xl bg-white p-4 border shadow-inner flex flex-col">

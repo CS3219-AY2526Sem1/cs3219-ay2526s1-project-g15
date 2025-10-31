@@ -8,8 +8,9 @@ import SessionLoading from "../components/SessionLoading";
 import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
 import { me } from "../../auth/api";
 import { createMatchRequest, getMatchRequestStatus, cancelMatchRequest, confirmMatch as confirmMatchApi, getMatchStatus, getSessionDetails } from "../../../shared/api/matchingService";
+import { questionService } from "../../../shared/api/questionService";
 
-const COMPLETED_TOPICS = ["Arrays", "Graphs"];
+const COMPLETED_TOPICS = ["Math", "Trie"];
 
 export default function Home() {
   // toggle to demo the sidebar
@@ -22,6 +23,7 @@ export default function Home() {
   const [matchId, setMatchId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [questionId, setQuestionId] = useState(null);
+  const [topics, setTopics] = useState([]);
 
   const navigate = useNavigate();
 
@@ -35,10 +37,17 @@ export default function Home() {
   }, []);
 
   // TODO: fetch from backend
-  const topics = useMemo(
-    () => ["Array", "String", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Math"],
-    []
-  );
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const data = await questionService.getTopics();
+        setTopics(data || []);
+      } catch (err) {
+        console.error("Error fetching topics:", err);
+      }
+    };
+    fetchTopics();
+  }, []);
   const completedTopics = COMPLETED_TOPICS;
 
   const firstAvailableTopic = useMemo(

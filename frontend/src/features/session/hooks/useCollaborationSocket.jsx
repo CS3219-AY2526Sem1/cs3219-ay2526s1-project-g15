@@ -25,7 +25,6 @@ export default function useCollaborationSocket(sessionId, userId, username) {
 
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log("Received:", message, message.status);
 
       switch (message.type) {
         case "session_state":
