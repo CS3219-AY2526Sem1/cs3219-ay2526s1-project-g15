@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: matching-postgres
+    environment:
+      POSTGRES_USER: peerprep
+      POSTGRES_PASSWORD: peerprep
+      POSTGRES_DB: peerprep_matches
+    ports:
+      - "5434:5432" # host:container (use 5434 on host to avoid clashing with other stacks)
+    volumes:
+      - pgdata_matching:/var/lib/postgresql/data
+    networks:
+      - peerprep-net
+
+  redis:
+    image: redis:7
+    container_name: matching-redis
+    ports:
+      - "6380:6379" # host:container (so you can test locally if needed)
+    networks:
+      - peerprep-net
+
+  matching-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matching-service
+    env_file:
+      - ./.env
+    ports:
+      - "8002:8002"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - peerprep-net
+    volumes:
+      - ./:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+volumes:
+  pgdata_matching:
+
+networks:
+  peerprep-net:
+    driver: bridge

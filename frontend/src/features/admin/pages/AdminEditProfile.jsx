@@ -1,0 +1,256 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import AdminTopNav from "../components/AdminTopNav";
+import Input from "../../../shared/components/Input";
+import Button from "../../../shared/components/Button";
+import { passwordIssues } from "../../auth/utils/validators";
+import { me, verifyPassword, updateProfile, deleteAccount } from "../../auth/api";
+
+export default function AdminEditProfile() {
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState({
+    username: "",
+    email: "",
+    oldPassword: "",
+    newPassword: "",
+    confirm: "",
+  });
+
+  useEffect(() => {
+    me().then((user) => {
+      setForm((prev) => ({
+        ...prev,
+        username: user.name || "",
+        email: user.email || "",
+      }));
+    }).catch((err) => {
+      console.log("Failed to fetch user profile:", err);  
+    });
+  }, []);
+
+  const [oldPwStatus, setOldPwStatus] = useState("idle"); // 'idle' | 'checking' | 'valid' | 'invalid'
+
+  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const pwErrors = passwordIssues(form.newPassword);
+
+  const verifyOldPassword = async () => {
+    if (!form.oldPassword) {
+      setOldPwStatus("idle");
+      return;
+    }
+    setOldPwStatus("checking");
+    try {
+      const res = await verifyPassword(form.oldPassword);
+      if (res.ok) {
+        setOldPwStatus("valid");
+      } else {
+        setOldPwStatus("invalid");
+      }
+    } catch (error) {
+      setOldPwStatus("invalid");
+    }
+  };
+
+  const usernameTaken = form.username.trim().toLowerCase() === "deanna";
+  const baseDisabled = !form.username.trim() || usernameTaken;
+
+  // If user is changing password, enforce validations
+  const wantsPwChange = oldPwStatus === "valid";
+  const pwInvalid =
+    wantsPwChange &&
+    (!!pwErrors.length || !form.newPassword || form.newPassword !== form.confirm);
+
+  const disabledSave = baseDisabled || oldPwStatus === "checking" || pwInvalid;
+
+  const onSave = async (e) => {
+    e.preventDefault();
+    if (disabledSave) return;
+
+    // Build payload
+    const payload = {
+      name: form.username.trim(),
+      // email is immutable
+      ...(wantsPwChange
+        ? { old_password: form.oldPassword, new_password: form.newPassword }
+        : {}),
+    };
+
+    try {
+      const data = await updateProfile(payload);
+      console.log("Update profile response:", data);
+      alert("Profile updated successfully");
+      navigate("/home");
+    } catch (error) {
+      alert("Failed to update profile");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Are you sure you want to delete your account?")) {
+      return;
+    }
+    
+    try {
+      await deleteAccount();
+      alert("Account deleted successfully");
+      navigate("/");
+    } catch (error) {
+      alert("Failed to delete account");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#D7D6E6]">
+      <AdminTopNav />
+      <div className="mx-auto max-w-4xl px-4 pt-10 text-xl text-[#262D6C] font-bold">
+        Your Profile:
+      </div>
+
+      <main className="mx-auto max-w-2xl px-4 py-6 space-y-6">
+        {/* Username */}
+        <section>
+          <p className="mb-2 text-gray-700">Username</p>
+          <Input
+            name="username"
+            placeholder="Username"
+            value={form.username}
+            onChange={onChange}
+            error={usernameTaken ? "This username is already taken." : undefined}
+            className="bg-[#68659A] text-white placeholder-white"
+          />
+        </section>
+
+        {/* Email */}
+        <section>
+          <p className="mb-2 text-gray-700">Email</p>
+          <Input
+            name="email"
+            value={form.email}
+            readOnly
+            className="bg-gray-400 text-white placeholder-white cursor-not-allowed focus:outline-none focus:ring-0 focus:border-none"
+          />
+        </section>
+
+        {/* Password */}
+        <section>
+          <p className="mb-2 text-gray-700">Change password</p>
+
+          <Input
+            name="oldPassword"
+            type="password"
+            revealable
+            placeholder="Please input your old password"
+            value={form.oldPassword}
+            onChange={(e) => {
+              onChange(e);
+              // reset status when editing
+              setOldPwStatus("idle");
+            }}
+            onBlur={verifyOldPassword}
+            className="bg-[#68659A] text-white placeholder-white"
+          />
+          {oldPwStatus === "checking" && (
+            <div className="mt-2 text-sm text-gray-700">Checking…</div>
+          )}
+          {oldPwStatus === "invalid" && (
+            <div className="mt-2 text-sm text-red-600">
+              Old password is incorrect.
+            </div>
+          )}
+          {oldPwStatus === "valid" && (
+            <div className="mt-2 text-sm text-green-700">
+              Old password verified.
+            </div>
+          )}
+
+          {/* Forgot password */}
+          <div className="pt-2">
+            <Link
+              to="/forgotpassword-enter-email"
+              className="text-[#262D6C] font-medium underline"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
+          {/* Reveal new password fields only when old password is valid */}
+          {wantsPwChange && (
+            <div className="mt-5 space-y-5">
+              <div>
+                <Input
+                  name="newPassword"
+                  type="password"
+                  revealable
+                  placeholder="New password"
+                  value={form.newPassword}
+                  onChange={onChange}
+                  className="bg-[#68659A] text-white placeholder-white"
+                />
+                {!!form.newPassword && pwErrors.length > 0 && (
+                  <div className="mt-2 text-sm text-red-600">
+                    <p>Password does not satisfy the following:</p>
+                    <ul className="list-disc ml-6">
+                      {pwErrors.map((e) => (
+                        <li key={e}>{e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <Input
+                  name="confirm"
+                  type="password"
+                  revealable
+                  placeholder="Confirm new password"
+                  value={form.confirm}
+                  onChange={onChange}
+                  error={
+                    form.confirm && form.confirm !== form.newPassword
+                      ? "Passwords do not match."
+                      : undefined
+                  }
+                  className="bg-[#68659A] text-white placeholder-white"
+                />
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="mt-4 flex items-center justify-center gap-6">
+          <Button
+            as={Link}
+            to="/home"
+            className="bg-[#A04747] hover:opacity-95 text-white px-8 text-xl"
+          >
+            Cancel
+          </Button>
+
+          <Button
+            onClick={onSave}
+            disabled={disabledSave}
+            className={`text-xl px-10 ${
+              disabledSave
+                ? "bg-[#4A53A7]/60 cursor-not-allowed"
+                : "bg-[#4A53A7] hover:opacity-95"
+            } text-white`}
+          >
+            Save
+          </Button>
+        </div>
+
+        {/* Delete Account */}
+        <div className="pt-4">
+          <Button
+            onClick={handleDeleteAccount}
+            className="w-full bg-[#A04747] hover:opacity-95 text-white text-2xl py-3"
+          >
+            Delete Account
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}
