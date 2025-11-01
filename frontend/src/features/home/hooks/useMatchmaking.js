@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { me } from "../../auth/api";
 import {
   createMatchRequest,
+  cancelMatchRequest,
   getMatchRequestStatus,
   confirmMatch as confirmMatchApi,
   getMatchStatus,
@@ -85,6 +86,7 @@ export default function useMatchmaking() {
   const cancelSearch = () => {
     clearTimeout(timeoutRef.current);
     clearInterval(pollRef.current);
+    cancelMatchRequest(reqId, token).catch(console.error);
     setStatus("idle");
   };
 

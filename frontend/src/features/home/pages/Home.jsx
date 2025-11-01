@@ -78,7 +78,7 @@ export default function Home() {
 
             {/* spinner */}
             {status === "searching" && (
-              <FindingMatch />
+              <FindingMatch cancelSearch={cancelSearch}/>
             )}
 
             {/* Match is found */}
