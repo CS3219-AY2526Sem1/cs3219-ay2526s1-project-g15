@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { me } from "../../auth/api";
 import {
   createMatchRequest,
@@ -26,7 +25,6 @@ export default function useMatchmaking() {
   const [username, setUsername] = useState("Guest");
 
   const token = localStorage.getItem("accessToken");
-  const navigate = useNavigate();
 
   // fetch user
   useEffect(() => {

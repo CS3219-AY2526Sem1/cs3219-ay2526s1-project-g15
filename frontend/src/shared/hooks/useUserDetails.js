@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { me } from "../../auth/api";
+import { me } from "../../features/auth/api";
 
 export default function useUserDetails() {
   const [user, setUser] = useState(null);
