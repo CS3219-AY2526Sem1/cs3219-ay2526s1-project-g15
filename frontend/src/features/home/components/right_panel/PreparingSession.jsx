@@ -1,6 +1,5 @@
-// SessionLoading.jsx
 import { useEffect } from "react";
-import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
+import useCollaborationSocket from "../../../session/hooks/useCollaborationSocket";
 
 export default function SessionLoading({ sessionId, userId, username, onReady }) {
   const { socketReady, sessionState } = useCollaborationSocket(sessionId, userId, username);
