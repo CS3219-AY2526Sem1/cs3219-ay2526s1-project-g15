@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
 from app.core.config import settings
+from app.core.redis import get_redis_client
 from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
@@ -21,6 +22,9 @@ from app.models.match_request import MatchRequest, MatchStatus
 from app.models.match import Match
 from app.clients.question_client import QuestionClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
+import json
+import traceback
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 qclient = QuestionClient()
@@ -249,63 +253,152 @@ async def confirm_match(
             }
 
         match = result
+        print("user_1 ", match.user1_confirmed)
+        print("user_2 ", match.user2_confirmed)
 
+        # If not both confirmed yet, just return waiting status
         if not (match.user1_confirmed and match.user2_confirmed):
-            raise HTTPException(
-                status_code=202,
-                detail="Waiting for partner confirmation"
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "waiting_for_partner",
+                    "match_id": match.id
+                }
             )
-        
-        # If both confirmed
-        # 1) Pick a question from QS using difficulty/topic stored on the match
-        difficulty_val = match.difficulty.value if hasattr(match.difficulty, "value") else match.difficulty
-        qs_difficulty  = difficulty_val.lower()
-        topic_val = match.topic
-        question = await qclient.pick_question(difficulty=qs_difficulty, topics=[topic_val])
 
-        # 2) Ensure we have a session_id; generate & persist if missing
-        if not match.session_id:
-            match.session_id = str(uuid.uuid4())
-            db.add(match)
-            db.commit()
-            db.refresh(match)
-
-        # 3) Publish match.found
+        redis_client = await get_redis_client()
         await rabbit.connect()
+
+        # Create session_id in DB if not already present
+        if not getattr(match, "session_id", None):
+            print("No session_id found. Creating one via matching_service...")
+            session_id = matching_service.create_and_store_session_id(db, match.id)
+            print("Session created and stored in DB:", session_id)
+        else:
+            session_id = match.session_id
+            print("Existing session_id found in DB:", session_id)
+        
+        # Check if session already exists in Redis
+        existing_session = await redis_client.get(session_id)
+        if not existing_session:
+            # Pick question based on match metadata
+            difficulty_val = (
+                match.difficulty.value
+                if hasattr(match.difficulty, "value")
+                else match.difficulty
+            )
+            topic_val = match.topic
+            question = await qclient.pick_question(
+                difficulty=difficulty_val.lower(),
+                topics=[topic_val]
+            )
+
+            # Initialize collaboration session in Redis
+            session_payload = {
+                "question": {
+                    "id": question["id"],
+                    "difficulty": question.get("difficulty"),
+                    "topics": question.get("topics", []),
+                    "title": question.get("title", "Untitled")
+                },
+                "code": "",
+                "language": "python",
+                "users": [match.user1_id, match.user2_id],
+            }
+
+            await redis_client.set(session_id, json.dumps(session_payload))
+            # debug: confirm it's stored
+            stored = await redis_client.get(session_id)
+            print("Session stored to Redis:", stored)
+        
+        else:
+            print("Session already exists in Redis")
+            # Session already exists in DB; retrieve from Redis
+            question = json.loads(existing_session).get("question")
+
+        # Publish match.found event (so collaboration-service consumer will create active session)
         payload = {
             "event_type": "match.found",
             "version": 1,
             "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "session_id": match.session_id,
+            "session_id": session_id,
             "question": {
-                "id": question["id"],
+                "id": question.get("id"),
                 "difficulty": question.get("difficulty"),
                 "topics": question.get("topics", []),
                 "title": question.get("title", "Untitled")
             },
-            "users": [
-                {"user_id": match.user1_id},
-                {"user_id": match.user2_id}
-            ],
+            "users": [{"user_id": match.user1_id}, {"user_id": match.user2_id}]
         }
+
         await rabbit.publish_message(
             exchange="matching.events",
             routing_key="match.found",
             message=payload
         )
 
-        # 4) Build response to caller
-        partner_id = match.user2_id if match.user1_id == user["user_id"] else match.user1_id
+        # Build response to caller
+        partner_id = (
+            match.user2_id
+            if match.user1_id == user["user_id"]
+            else match.user1_id
+        )
+        
         return MatchConfirmedResponse(
             match_id=match.id,
-            session_id=match.session_id,
-            question_id=str(question["id"]),
+            session_id=session_id,
+            question_id=str(question.get("id")),
             partner_id=partner_id
-        )            
-            
-    except ValueError as e:
+        )
+
+    except Exception as e:
+        print("Error confirming match:", e)
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.get("/{match_id}/status")
+async def get_match_status(match_id: str, db: Session = Depends(get_db)):
+    """
+    Returns the confirmation + session status of a match.
+    """
+    # 1) Fetch match from DB
+    match = db.query(Match).filter(Match.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    session_id = getattr(match, "collaboration_session_id", None)
+    # If session_id exists in DB, check Redis to see if session is fully initialized
+    if session_id:
+        redis_client = await get_redis_client()
+        existing_session = await redis_client.get(session_id)
+        if not existing_session:
+            session_id = None  # session not ready yet
+
+    # 2) Build base response
+    status = {
+        "confirm_status": match.user1_confirmed and match.user2_confirmed,
+        "session_id": session_id
+    }
+
+    return status
+
+@router.get("/session/{session_id}")
+async def get_session_details(session_id: str, redis_client=Depends(get_redis_client)):
+    """
+    Fetch collaboration session details by session_id from Redis
+    """
+    session_data = await redis_client.get(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Redis stores bytes; decode and load JSON
+    try:
+        session_json = json.loads(session_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Session data corrupted")
+    
+    return session_json
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str):

@@ -1,41 +1,74 @@
-export default function ProblemPanel({ className = "" }) {
-  return (
-    <aside className={`w-full lg:w-[340px] rounded-2xl bg-[#5F5699] text-white p-6 shadow border border-white/10 ${className}`}>
-      {/* TODO: change to question in the backend */}
-      <h2 className="text-lg font-bold mb-2">1. Linked List Cycle</h2>
+import { useState, useEffect, use } from "react";
+import { questionService } from "../../../shared/api/questionService";
+import { getSessionDetails } from "../../../shared/api/matchingService";
 
-      <div className="flex gap-2 mb-4">
-        {/* TODO: change it to whatever the user chose as their topic and difficulty level that was sent to backend*/}
-        <span className="px-3 py-1 rounded-full bg-white/15">Arrays</span>
-        <span className="px-3 py-1 rounded-full bg-white/15">Medium</span>
+export default function ProblemPanel({ sessionId, className = "" }) {
+  const [question, setQuestion] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const fetchQuestion = async () => {
+      try {
+        setLoading(true);
+
+        const sessionDetails = await getSessionDetails(sessionId);
+        const question_id = sessionDetails.question.id;
+        console.log("Fetched session details:", sessionDetails);
+        const questionData = await questionService.getQuestion(question_id);
+        console.log("Fetched question data:", questionData);
+        setQuestion(questionData);
+      } catch (err) {
+        console.error("Error fetching session details:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestion();
+  }, [sessionId]);
+
+  if (loading) {
+    return <div className="text-white">Loading question...</div>;
+  }
+
+  if (!question) {
+    return <div className="text-white">Question not found</div>;
+  }
+
+  return (
+    <aside className={`w-full lg:w-full rounded-2xl bg-[#5F5699] text-white p-6 shadow border border-white/10 ${className}`}>
+      <h2 className="text-lg font-bold mb-2">{question.title}</h2>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {question.topics.map((topic) => (
+          <span key={topic} className="px-3 py-1 rounded-full bg-white/15 text-center justify-center">
+            {topic}
+          </span>
+        ))}
+        <span className="px-3 py-1 rounded-full bg-white/15 text-center justify-center">
+          {question.difficulty}
+        </span>
       </div>
 
       {/* TODO: change question to whatever is in the backend that matches whatever the user selected*/}
-      <p className="text-white/90 text-sm leading-relaxed">
-        Given head, the head of a linked list, determine if the linked list has a cycle in it.
-        A cycle exists if some node can be reached again by following next pointers. Return true
-        if there is a cycle, else false. <br/><br/>
-        Internally, <code className="bg-white/10 px-1 rounded">pos</code> denotes the index of the node that tail’s next pointer connects to (not passed as a parameter).
-      </p>
-
-      <div className="mt-6 space-y-4 text-sm">
-        <div>
-          <p className="font-semibold mb-1">Example 1:</p>
-          <p>Input: head = [3,2,0,-4], pos = 1</p>
-          <p>Output: true</p>
-          <p className="text-white/80">Explanation: cycle connects to index 1.</p>
-        </div>
-        <div>
-          <p className="font-semibold mb-1">Example 2:</p>
-          <p>Input: head = [1,2], pos = 0</p>
-          <p>Output: true</p>
-        </div>
-        <div>
-          <p className="font-semibold mb-1">Example 3:</p>
-          <p>Input: head = [1], pos = -1</p>
-          <p>Output: false</p>
-        </div>
+      <div className="text-white/90 text-sm leading-relaxed prose prose-invert">
+        <div dangerouslySetInnerHTML={{ __html: question.description }} />
       </div>
+
+      {question.examples?.length > 0 && (
+        <div className="mt-6 space-y-4 text-sm">
+          {question.examples.map((ex, idx) => (
+            <div key={idx} className="bg-white/10 p-2 rounded break-words">
+              <p className="font-semibold mb-1">Example {idx + 1}:</p>
+              <p>Input: {ex.input}</p>
+              <p>Output: {ex.output}</p>
+              {ex.explanation && <p className="text-white/80">{ex.explanation}</p>}
+            </div>
+          ))}
+        </div>
+      )}
     </aside>
   );
 }
