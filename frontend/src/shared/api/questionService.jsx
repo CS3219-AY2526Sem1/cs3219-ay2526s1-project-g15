@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1/questions/';
+const API_BASE = 'http://localhost:8003/api/v1/questions/';
 
 function authHeaders() {
   const t = localStorage.getItem('accessToken');
