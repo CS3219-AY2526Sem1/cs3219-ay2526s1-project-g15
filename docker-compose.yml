@@ -30,7 +30,7 @@ services:
     expose:
       - "8001"
     ports:
-      - "8001:8001"  
+      - "8001:8001"
     networks: [appnet]
 
   question-service:
@@ -60,7 +60,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8002
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_matches
+      - DATABASE_URL=postgresql+psycopg://postgres:${MS_PASSWORD}@host.docker.internal:5436/matching_db
       - REDIS_URL=redis://redis:6379/0
       - AUTH_ACCESS_SECRET=secretkey
       - AUTH_ALGORITHM=HS256
