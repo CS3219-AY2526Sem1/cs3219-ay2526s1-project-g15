@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
 import { questionService } from "../../../shared/api/questionService";
+import { parseRelaxed } from "../../../shared/utils/ioFormat";
 
 // Backend expects: "easy", "medium", "hard" (lowercase)
 const DIFFICULTIES = [
@@ -9,6 +10,16 @@ const DIFFICULTIES = [
   { label: "Medium", value: "medium" },
   { label: "Difficult", value: "hard" }
 ];
+
+const normalizeField = (val) => {
+  if (typeof val !== "string") return val;
+  const trimmed = val.trim();
+  if (!trimmed) return ""; // keep empty as empty string
+  const relaxed = parseRelaxed(trimmed);
+  if (relaxed !== null) return relaxed;
+  try { return JSON.parse(trimmed); } catch {}
+  return val; // keep as plain text if not parseable
+};
 
 export default function EditQuestion() {
   const { id } = useParams();
@@ -219,26 +230,15 @@ export default function EditQuestion() {
 
     try {
       const parsedTestCases = form.testCases
-        .filter((tc) => {
-          const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
-          const outputStr = typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output);
-          return inputStr.trim() && outputStr.trim();
-        })
-        .map((tc, idx) => {
-          try {
-            const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
-            const outputStr = typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output);
-            const inputObj = JSON.parse(inputStr);
-            const outputObj = JSON.parse(outputStr);
-            return { input: inputObj, output: outputObj };
-          } catch (err) {
-            console.warn(`Test case ${idx + 1} not in JSON format, using as strings:`, tc);
-            return {
-              input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
-              output: typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output),
-            };
-          }
-        });
+  .filter(tc => {
+    const inStr = typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input);
+    const outStr = typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output);
+    return inStr.trim() && outStr.trim();
+  })
+  .map((tc) => ({
+    input: normalizeField(tc.input),
+    output: normalizeField(tc.output),
+  }));
 
       const questionData = {
         title: form.title.trim(),

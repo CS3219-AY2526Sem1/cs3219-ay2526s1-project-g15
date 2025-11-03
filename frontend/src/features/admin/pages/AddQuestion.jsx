@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
 import { questionService } from "../../../shared/api/questionService";
+import { parseRelaxed } from "../../../shared/utils/ioFormat";
 
 // Backend expects lowercase "easy", "medium", "hard"
 const DIFFICULTIES = [
@@ -9,6 +10,17 @@ const DIFFICULTIES = [
   { label: "Medium", value: "medium" },
   { label: "Difficult", value: "hard" },
 ];
+
+const normalizeField = (val) => {
+  if (typeof val !== "string") return val;
+  const trimmed = val.trim();
+  if (!trimmed) return "";
+  const relaxed = parseRelaxed(trimmed);
+  if (relaxed !== null) return relaxed;
+  try { return JSON.parse(trimmed); } catch {}
+  return val;
+};
+
 
 export default function AddQuestion() {
   const navigate = useNavigate();
@@ -184,23 +196,18 @@ export default function AddQuestion() {
 
     try {
       const parsedTestCases = form.testCases
-        .filter((tc) => tc.input.trim() && tc.output.trim())
-        .map((tc, idx) => {
-          try {
-            const inputObj = JSON.parse(tc.input);
-            const outputObj = JSON.parse(tc.output);
-            return { input: inputObj, output: outputObj };
-          } catch (err) {
-            console.warn(
-              `Test case ${idx + 1} not in JSON format, using as strings:`,
-              tc
-            );
-            return {
-              input: tc.input,
-              output: tc.output,
-            };
-          }
-        });
+  .filter(tc => tc.input.trim() && tc.output.trim())
+  .map(tc => ({
+    input: normalizeField(tc.input),
+    output: normalizeField(tc.output),
+  }));
+
+if (parsedTestCases.length === 0) {
+  setErrors({ submit: "Please add at least one test case." });
+  setSubmitting(false);
+  return;
+}
+
 
       if (parsedTestCases.length === 0) {
         setErrors({ submit: "Please add at least one test case." });
