@@ -146,13 +146,18 @@ export default function Room() {
         try { parsedInput = JSON.parse(tc.input); } catch { parsedInput = tc.input; }
       }
     }
+    const outputDisplay = Array.isArray(tc.output)
+      ? JSON.stringify(tc.output)          
+      : prettyPrintOutput(tc.output);    
+
     return {
       inputDisplay: prettyPrintInput(parsedInput),
-      outputDisplay: prettyPrintOutput(tc.output),
+      outputDisplay,
       explanation: tc.explanation || "",
     };
   });
 }, [question]);
+
 
   return (
     <div className="min-h-screen bg-[#D7D6E6] flex flex-col">

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
 import { questionService } from "../../../shared/api/questionService";
-import { parseRelaxed } from "../../../shared/utils/ioFormat";
 
 // Backend expects: "easy", "medium", "hard" (lowercase)
 const DIFFICULTIES = [
@@ -11,14 +10,12 @@ const DIFFICULTIES = [
   { label: "Difficult", value: "hard" }
 ];
 
-const normalizeField = (val) => {
+// strict JSON parser for test cases
+const parseStrictJSON = (val) => {
   if (typeof val !== "string") return val;
   const trimmed = val.trim();
-  if (!trimmed) return ""; // keep empty as empty string
-  const relaxed = parseRelaxed(trimmed);
-  if (relaxed !== null) return relaxed;
-  try { return JSON.parse(trimmed); } catch {}
-  return val; // keep as plain text if not parseable
+  if (!trimmed) return "";
+  return JSON.parse(trimmed); // will throw if invalid
 };
 
 export default function EditQuestion() {
@@ -34,12 +31,15 @@ export default function EditQuestion() {
   const [topics, setTopics] = useState([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
 
-  // add-topic 
+  // add-topic
   const [isAddingTopic, setIsAddingTopic] = useState(false);
   const [newTopic, setNewTopic] = useState("");
   const [topicError, setTopicError] = useState("");
-  // track only topics created by user 
+  // track only topics created by user
   const [userTopics, setUserTopics] = useState([]);
+
+  // per-test-case validation errors
+  const [testCaseErrors, setTestCaseErrors] = useState({});
 
   const [form, setForm] = useState({
     title: "",
@@ -52,7 +52,7 @@ export default function EditQuestion() {
     testCases: [{ input: "", output: "" }],
   });
 
-  // Fetch topics 
+  // Fetch topics
   useEffect(() => {
     const fetchTopics = async () => {
       try {
@@ -85,11 +85,13 @@ export default function EditQuestion() {
           topics: data.topics || [],
           tags: data.tags || [],
           constraints: data.constraints || "",
+          // prettify examples as before
           examples: data.examples?.length ? data.examples : [{ input: "", output: "", explanation: "" }],
+          // IMPORTANT: when loading, we pretty-print test cases so the admin sees nice JSON
           testCases: data.test_cases?.length
             ? data.test_cases.map(tc => ({
-                input: typeof tc.input === "object" ? JSON.stringify(tc.input, null, 2) : tc.input,
-                output: typeof tc.output === "object" ? JSON.stringify(tc.output, null, 2) : tc.output,
+                input: typeof tc.input === "object" ? JSON.stringify(tc.input, null, 2) : (tc.input ?? ""),
+                output: typeof tc.output === "object" ? JSON.stringify(tc.output, null, 2) : (tc.output ?? ""),
               }))
             : [{ input: "", output: "" }],
         });
@@ -228,18 +230,35 @@ export default function EditQuestion() {
 
     setSubmitting(true);
 
-    try {
-      const parsedTestCases = form.testCases
-  .filter(tc => {
-    const inStr = typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input);
-    const outStr = typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output);
-    return inStr.trim() && outStr.trim();
-  })
-  .map((tc) => ({
-    input: normalizeField(tc.input),
-    output: normalizeField(tc.output),
-  }));
+    // --- strict JSON validation for test cases ---
+    const tcErrors = {};
+    const parsedTestCases = [];
 
+    form.testCases.forEach((tc, idx) => {
+      const inStr = (tc.input ?? "").trim();
+      const outStr = (tc.output ?? "").trim();
+
+      // skip completely empty rows
+      if (!inStr && !outStr) return;
+
+      try {
+        const input = parseStrictJSON(inStr);
+        const output = parseStrictJSON(outStr);
+        parsedTestCases.push({ input, output });
+      } catch (err) {
+        tcErrors[idx] = "Input and output must be valid JSON.";
+      }
+    });
+
+    if (Object.keys(tcErrors).length) {
+      setTestCaseErrors(tcErrors);
+      setSubmitting(false);
+      return;
+    } else {
+      setTestCaseErrors({});
+    }
+
+    try {
       const questionData = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -581,15 +600,33 @@ export default function EditQuestion() {
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-2">Test Cases</label>
                   <p className="text-xs text-gray-600 mb-3">
-                    Enter test cases in JSON format (recommended) or as plain text.
+                    Enter test cases in <strong>JSON format (required)</strong>.
+                    Example input: <code>{"{\"nums\":[2,7,11,15],\"target\":9}"}</code>
                   </p>
                   <div className="space-y-3">
                     {form.testCases.map((tc, idx) => (
-                      <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                      <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-start">
                         <textarea
                           value={tc.input}
                           onChange={(e) => onChangeTestCase(idx, "input", e.target.value)}
-                          placeholder='Input: {"nums": [2,7], "target": 9}'
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (!val) return;
+                            try {
+                              const parsed = JSON.parse(val);
+                              onChangeTestCase(idx, "input", JSON.stringify(parsed, null, 2));
+                              setTestCaseErrors(prev => {
+                                const { [idx]: _, ...rest } = prev;
+                                return rest;
+                              });
+                            } catch {
+                              setTestCaseErrors(prev => ({
+                                ...prev,
+                                [idx]: "Must be valid JSON.",
+                              }));
+                            }
+                          }}
+                          placeholder='{"nums":[2,7], "target":9}'
                           rows={2}
                           disabled={submitting}
                           className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] font-mono text-sm resize-y"
@@ -597,7 +634,24 @@ export default function EditQuestion() {
                         <textarea
                           value={tc.output}
                           onChange={(e) => onChangeTestCase(idx, "output", e.target.value)}
-                          placeholder="Output: [0,1]"
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (!val) return;
+                            try {
+                              const parsed = JSON.parse(val);
+                              onChangeTestCase(idx, "output", JSON.stringify(parsed, null, 2));
+                              setTestCaseErrors(prev => {
+                                const { [idx]: _, ...rest } = prev;
+                                return rest;
+                              });
+                            } catch {
+                              setTestCaseErrors(prev => ({
+                                ...prev,
+                                [idx]: "Must be valid JSON.",
+                              }));
+                            }
+                          }}
+                          placeholder='[0,1]'
                           rows={2}
                           disabled={submitting}
                           className="rounded-xl bg-gray-100 px-4 py-2 outline-none focus:ring-2 focus:ring-[#4A53A7] font-mono text-sm resize-y"
@@ -611,6 +665,9 @@ export default function EditQuestion() {
                         >
                           Remove
                         </button>
+                        {testCaseErrors[idx] && (
+                          <p className="text-xs text-red-600 md:col-span-3">{testCaseErrors[idx]}</p>
+                        )}
                       </div>
                     ))}
                   </div>
