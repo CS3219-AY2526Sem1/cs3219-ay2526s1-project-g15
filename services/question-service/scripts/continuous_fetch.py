@@ -138,11 +138,14 @@ class QuestionFetcher:
             examples = []
             if 'exampleTestcases' in detail_data and detail_data['exampleTestcases']:
                 test_cases = detail_data.get('exampleTestcases', '').strip().split('\n')
+                # Group every two lines: first line is input (array), second is output (target)
                 for i in range(0, len(test_cases), 2):
                     if i + 1 < len(test_cases):
+                        input_str = test_cases[i].strip()
+                        output_str = test_cases[i + 1].strip()
                         examples.append({
-                            "input": test_cases[i].strip(),
-                            "output": test_cases[i + 1].strip(),
+                            "input": input_str,
+                            "output": output_str,
                             "explanation": ""
                         })
 
