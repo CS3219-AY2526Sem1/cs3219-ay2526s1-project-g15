@@ -60,7 +60,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8002
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/peerprep_matches
+      - DATABASE_URL=postgresql+psycopg://postgres:${MS_PASSWORD}@host.docker.internal:5436/matching_db
       - REDIS_URL=redis://redis:6379/0
       - AUTH_ACCESS_SECRET=secretkey
       - AUTH_ALGORITHM=HS256
@@ -92,10 +92,12 @@ services:
       - DATABASE_URL=postgresql+asyncpg://collaboration_user:collabpass@postgres:5432/peerprep_collaboration
       - REDIS_URL=redis://redis:6379/0
       - USER_SERVICE_URL=http://user-service:8001
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
       - QUEUE_NAME=collaboration_events
     expose:
       - "8004"
+    ports:
+      - "8004:8004"
     depends_on:
       postgres:
         condition: service_healthy

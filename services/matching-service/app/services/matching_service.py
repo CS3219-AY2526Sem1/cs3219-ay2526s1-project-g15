@@ -244,17 +244,28 @@ class MatchingService:
         else:
             raise ValueError("User not part of this match")
         
-        # If both confirmed, create collaboration session
-        if match.user1_confirmed and match.user2_confirmed:
-            match.confirmed_at = datetime.now(timezone.utc)
-            collaboration_id = str(uuid.uuid4())
-            match.session_id = collaboration_id
-        
         db.commit()
         db.refresh(match)
         
         return match
     
+    def create_and_store_session_id(self, db: Session, match_id: str) -> str:
+        """Generates a session ID for a confirmed match and stores it in the DB"""
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise ValueError("Match not found")
+
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+
+        # Store it in the DB
+        match.collaboration_session_id = session_id
+        db.commit()
+        db.refresh(match)
+
+        return session_id
+
+
     def handle_timeout(self, db: Session, request_id: str):
         """Handle match request timeout"""
         match_request = db.query(MatchRequest).filter(

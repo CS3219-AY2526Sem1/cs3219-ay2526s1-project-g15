@@ -18,10 +18,17 @@ export default function EditQuestion() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [tagInput, setTagInput] = useState("");
-  const [customTopicInput, setCustomTopicInput] = useState("");
 
+  // topics
   const [topics, setTopics] = useState([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
+
+  // add-topic 
+  const [isAddingTopic, setIsAddingTopic] = useState(false);
+  const [newTopic, setNewTopic] = useState("");
+  const [topicError, setTopicError] = useState("");
+  // track only topics created by user 
+  const [userTopics, setUserTopics] = useState([]);
 
   const [form, setForm] = useState({
     title: "",
@@ -34,7 +41,7 @@ export default function EditQuestion() {
     testCases: [{ input: "", output: "" }],
   });
 
-  // Fetch topics
+  // Fetch topics 
   useEffect(() => {
     const fetchTopics = async () => {
       try {
@@ -59,8 +66,7 @@ export default function EditQuestion() {
         setLoading(true);
         const data = await questionService.getQuestion(id);
         if (!ok) return;
-        
-        // Transform backend data to form state
+
         setForm({
           title: data.title || "",
           description: data.description || "",
@@ -69,10 +75,10 @@ export default function EditQuestion() {
           tags: data.tags || [],
           constraints: data.constraints || "",
           examples: data.examples?.length ? data.examples : [{ input: "", output: "", explanation: "" }],
-          testCases: data.test_cases?.length 
+          testCases: data.test_cases?.length
             ? data.test_cases.map(tc => ({
-                input: typeof tc.input === 'object' ? JSON.stringify(tc.input, null, 2) : tc.input,
-                output: typeof tc.output === 'object' ? JSON.stringify(tc.output, null, 2) : tc.output
+                input: typeof tc.input === "object" ? JSON.stringify(tc.input, null, 2) : tc.input,
+                output: typeof tc.output === "object" ? JSON.stringify(tc.output, null, 2) : tc.output,
               }))
             : [{ input: "", output: "" }],
         });
@@ -83,7 +89,9 @@ export default function EditQuestion() {
         setLoading(false);
       }
     })();
-    return () => { ok = false; };
+    return () => {
+      ok = false;
+    };
   }, [id]);
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
@@ -94,15 +102,55 @@ export default function EditQuestion() {
       ...f,
       topics: f.topics.includes(topic)
         ? f.topics.filter(t => t !== topic)
-        : [...f.topics, topic]
+        : [...f.topics, topic],
     }));
+  };
+
+  const handleAddNewTopic = () => {
+    const t = newTopic.trim();
+    if (!t) return;
+
+    // check duplicates (case-insensitive)
+    const exists = topics.some(
+      (topic) => topic.toLowerCase() === t.toLowerCase()
+    );
+    if (exists) {
+      setTopicError("This topic already exists");
+      return;
+    }
+
+    // add to topics list and to userTopics
+    setTopics((prev) => [...prev, t]);
+    setUserTopics((prev) => [...prev, t]);
+
+    // auto-select
+    setForm((f) => ({
+      ...f,
+      topics: f.topics.includes(t) ? f.topics : [...f.topics, t],
+    }));
+
+    setNewTopic("");
+    setTopicError("");
+    setIsAddingTopic(false);
+  };
+
+  const handleRemoveTopic = (topicToRemove) => {
+    // only allow removal if it was user-added
+    if (!userTopics.includes(topicToRemove)) return;
+
+    setTopics((prev) => prev.filter((t) => t !== topicToRemove));
+    setForm((f) => ({
+      ...f,
+      topics: f.topics.filter((t) => t !== topicToRemove),
+    }));
+    setUserTopics((prev) => prev.filter((t) => t !== topicToRemove));
   };
 
   // Examples
   const onAddExample = () =>
-    setForm(f => ({ 
-      ...f, 
-      examples: [...f.examples, { input: "", output: "", explanation: "" }] 
+    setForm(f => ({
+      ...f,
+      examples: [...f.examples, { input: "", output: "", explanation: "" }],
     }));
 
   const onRemoveExample = (idx) =>
@@ -170,24 +218,28 @@ export default function EditQuestion() {
     setSubmitting(true);
 
     try {
-      // convert string inputs to JSON objects
       const parsedTestCases = form.testCases
-        .filter(tc => tc.input.trim() && tc.output.trim())
+        .filter((tc) => {
+          const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
+          const outputStr = typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output);
+          return inputStr.trim() && outputStr.trim();
+        })
         .map((tc, idx) => {
           try {
-            const inputObj = JSON.parse(tc.input);
-            const outputObj = JSON.parse(tc.output);
+            const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
+            const outputStr = typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output);
+            const inputObj = JSON.parse(inputStr);
+            const outputObj = JSON.parse(outputStr);
             return { input: inputObj, output: outputObj };
           } catch (err) {
             console.warn(`Test case ${idx + 1} not in JSON format, using as strings:`, tc);
             return {
-              input: tc.input,
-              output: tc.output
+              input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
+              output: typeof tc.output === 'string' ? tc.output : JSON.stringify(tc.output),
             };
           }
         });
 
-      // Prepare data for backend
       const questionData = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -196,14 +248,14 @@ export default function EditQuestion() {
         constraints: form.constraints.trim() || undefined,
         examples: form.examples.filter(ex => ex.input.trim() || ex.output.trim()),
         test_cases: parsedTestCases,
-        is_active: true
+        is_active: true,
+        tags: form.tags,
       };
 
       console.log("Updating question:", questionData);
-      
+
       await questionService.updateQuestion(id, questionData);
-      
-      // navigate back if successful
+
       navigate("/admin/home");
     } catch (err) {
       console.error("Failed to update question:", err);
@@ -308,7 +360,7 @@ export default function EditQuestion() {
                   {errors.difficulty && <p className="text-sm text-red-600 mt-1">{errors.difficulty}</p>}
                 </div>
 
-                {/* Topics (Multi-select) */}
+                {/* Topics*/}
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-1">
                     Topics * (select at least one)
@@ -323,21 +375,109 @@ export default function EditQuestion() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-100">
-                      {topics.map((topic) => (
+                      {topics.map((topic) => {
+                        const isSelected = form.topics.includes(topic);
+                        const isUserAdded = userTopics.includes(topic);
+
+                        return (
+                          <div
+                            key={topic}
+                            className={`relative flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                              isSelected
+                                ? "bg-[#4A53A7] text-white"
+                                : "bg-white text-gray-700"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleTopic(topic)}
+                              disabled={submitting}
+                              className={isUserAdded ? "pr-5" : ""}
+                            >
+                              {topic}
+                            </button>
+                            {isUserAdded && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTopic(topic)}
+                                disabled={submitting}
+                                className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs transition ${
+                                  isSelected
+                                    ? "text-white hover:bg-white/20"
+                                    : "text-gray-500 hover:bg-gray-200"
+                                }`}
+                                aria-label={`Remove ${topic}`}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Add-topic */}
+                      {!isAddingTopic ? (
                         <button
-                          key={topic}
                           type="button"
-                          onClick={() => toggleTopic(topic)}
+                          onClick={() => {
+                            setIsAddingTopic(true);
+                            setTopicError("");
+                          }}
                           disabled={submitting}
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                            form.topics.includes(topic)
-                              ? "bg-[#4A53A7] text-white"
-                              : "bg-white text-gray-700 hover:bg-gray-200"
-                          }`}
+                          className="px-3 py-1.5 rounded-full text-sm font-medium bg-white text-gray-700 hover:bg-gray-200 flex items-center gap-1"
                         >
-                          {topic}
+                          <span className="text-base leading-none">＋</span>
+                          <span>Add</span>
                         </button>
-                      ))}
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5">
+                            <input
+                              autoFocus
+                              value={newTopic}
+                              onChange={(e) => {
+                                setNewTopic(e.target.value);
+                                setTopicError("");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddNewTopic();
+                                }
+                                if (e.key === "Escape") {
+                                  setIsAddingTopic(false);
+                                  setNewTopic("");
+                                  setTopicError("");
+                                }
+                              }}
+                              placeholder="New topic..."
+                              className="bg-transparent outline-none text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddNewTopic}
+                              className="text-[#4A53A7] text-sm font-medium"
+                            >
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAddingTopic(false);
+                                setNewTopic("");
+                                setTopicError("");
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-sm"
+                              aria-label="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {topicError && (
+                            <p className="text-xs text-red-600 ml-3">{topicError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   {errors.topics && <p className="text-sm text-red-600 mt-1">{errors.topics}</p>}

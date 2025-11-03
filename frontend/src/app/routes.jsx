@@ -8,7 +8,7 @@ import Verification from "../features/auth/pages/forgotPassword/Verification";
 import EnterEmail from "../features/auth/pages/forgotPassword/EnterEmail";
 import ForgotPassword from "../features/auth/pages/forgotPassword/ForgotPassword";
 import Home from "../features/home/pages/Home";
-import History from "../features/session/pages/History";
+import History from "../features/history/pages/History";
 import Room from "../features/session/pages/Room";
 import EditProfile from "../features/profile/pages/EditProfile";
 import ProtectedRoute from "../shared/ProtectedRoute";
