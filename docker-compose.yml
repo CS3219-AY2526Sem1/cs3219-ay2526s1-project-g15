@@ -11,7 +11,42 @@ services:
       - user-service
       - question-service
       - matching-service
-    networks: [appnet]
+    networks:
+      - appnet
+
+  cloudsql-proxy-users:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -instances=project-d7d6873b-331e-4968-a36:asia-southeast1:peerprep-users-g15=tcp:5434
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
+
+  cloudsql-proxy-questions:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -address 0.0.0.0
+      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:5435
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
+
+  cloudsql-proxy-matching:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:5436
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
 
   user-service:
     build: ./services/user-service
@@ -31,7 +66,10 @@ services:
       - "8001"
     ports:
       - "8001:8001"
-    networks: [appnet]
+    networks:
+      - appnet
+    depends_on:
+      - cloudsql-proxy-users
 
   question-service:
     build: ./services/question-service
@@ -48,9 +86,10 @@ services:
     ports:
       - "8003:8003"
     depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [appnet]
+      - postgres
+      - cloudsql-proxy-questions
+    networks:
+      - appnet
     command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
 
   matching-service:
@@ -76,11 +115,11 @@ services:
     volumes:
       - ./shared:/app/shared
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks: [appnet]
+      - postgres
+      - redis
+      - cloudsql-proxy-matching
+    networks:
+      - appnet
 
   collaboration-service:
     build: ./services/collaboration-service
@@ -99,13 +138,11 @@ services:
     ports:
       - "8004:8004"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-    networks: [appnet]
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - appnet
     command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
 
   postgres:
@@ -125,14 +162,16 @@ services:
       interval: 2s
       timeout: 2s
       retries: 20
-    networks: [appnet]
+    networks:
+      - appnet
 
   redis:
     image: redis:7
     container_name: redis
     ports:
       - "6380:6379"
-    networks: [appnet]
+    networks:
+      - appnet
     command: ["redis-server", "--loglevel", "warning"]
     # command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
 
