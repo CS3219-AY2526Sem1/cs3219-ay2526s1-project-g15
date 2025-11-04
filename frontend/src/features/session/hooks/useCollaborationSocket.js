@@ -14,7 +14,7 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     console.log("useCollaborationSocket effect running", sessionId, userId, username);
     if (!sessionId || !userId) return;
 
-    const wsUrl = `ws://localhost:8004/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
+    const wsUrl = `/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
