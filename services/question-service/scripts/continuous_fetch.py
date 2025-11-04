@@ -134,20 +134,42 @@ class QuestionFetcher:
             topic_tags = detail_data.get('topicTags', [])
             topics = [tag.get('name', '') for tag in topic_tags if tag.get('name')]
 
-            # Parse examples
+            # Parse examples from HTML description
+            import re
+            from html import unescape
+
             examples = []
-            if 'exampleTestcases' in detail_data and detail_data['exampleTestcases']:
-                test_cases = detail_data.get('exampleTestcases', '').strip().split('\n')
-                # Group every two lines: first line is input (array), second is output (target)
-                for i in range(0, len(test_cases), 2):
-                    if i + 1 < len(test_cases):
-                        input_str = test_cases[i].strip()
-                        output_str = test_cases[i + 1].strip()
-                        examples.append({
-                            "input": input_str,
-                            "output": output_str,
-                            "explanation": ""
-                        })
+            desc_html = detail_data.get('question', '')
+            pre_blocks = re.findall(r'<pre>(.*?)</pre>', desc_html, re.DOTALL)
+            for block in pre_blocks:
+                block = unescape(block)
+                # Only process blocks that contain both Input and Output
+                if 'Input:' in block and 'Output:' in block:
+                    # Remove HTML tags from block
+                    block_clean = re.sub(r'<.*?>', '', block)
+                    input_match = re.search(r'Input:\s*(.*?)\n', block_clean)
+                    output_match = re.search(r'Output:\s*(.*?)\n', block_clean)
+                    input_val = None
+                    if input_match:
+                        input_str = input_match.group(1).strip()
+                        # Use regex to match key = value pairs, allowing for arrays and quoted strings
+                        input_dict = {}
+                        for m in re.finditer(r'(\w+)\s*=\s*(\[[^\]]*\]|\"[^\"]*\"|[^,]+)', input_str):
+                            k, v = m.group(1), m.group(2)
+                            input_dict[k] = v.strip().strip('"')
+                        if len(input_dict) > 1:
+                            input_val = input_dict
+                        elif len(input_dict) == 1:
+                            input_val = list(input_dict.values())[0]
+                        else:
+                            input_val = input_str
+                    else:
+                        input_val = None
+                    output_val = output_match.group(1).strip() if output_match else None
+                    examples.append({
+                        "input": input_val,
+                        "output": output_val
+                    })
 
             # Create question object
             question = Question(
