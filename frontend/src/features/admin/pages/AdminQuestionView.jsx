@@ -11,6 +11,7 @@ const DIFF_COLOR = {
   hard: "bg-red-100 text-red-700",
 };
 
+
 export default function AdminQuestionView() {
   const { id } = useParams();
   const navigate = useNavigate();

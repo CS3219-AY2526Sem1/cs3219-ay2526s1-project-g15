@@ -235,8 +235,8 @@ export default function EditQuestion() {
     const parsedTestCases = [];
 
     form.testCases.forEach((tc, idx) => {
-      const inStr = (tc.input ?? "").trim();
-      const outStr = (tc.output ?? "").trim();
+      const inStr = typeof tc.input === "string" ? tc.input.trim() : JSON.stringify(tc.input ?? "");
+      const outStr = typeof tc.output === "string" ? tc.output.trim() : JSON.stringify(tc.output ?? "");
 
       // skip completely empty rows
       if (!inStr && !outStr) return;
@@ -259,17 +259,31 @@ export default function EditQuestion() {
     }
 
     try {
+            const cleanExamples = form.examples
+        .map((ex) => {
+          const input = typeof ex.input === "string" ? ex.input : JSON.stringify(ex.input ?? "");
+          const output = typeof ex.output === "string" ? ex.output : JSON.stringify(ex.output ?? "");
+          return {
+            input: input.trim(),
+            output: output.trim(),
+            explanation: (ex.explanation || "").trim(),
+          };
+        })
+        // keep only ones that have something
+        .filter(ex => ex.input || ex.output || ex.explanation);
+
       const questionData = {
         title: form.title.trim(),
         description: form.description.trim(),
         difficulty: form.difficulty,
         topics: form.topics,
         constraints: form.constraints.trim() || undefined,
-        examples: form.examples.filter(ex => ex.input.trim() || ex.output.trim()),
+        examples: cleanExamples,
         test_cases: parsedTestCases,
         is_active: true,
         tags: form.tags,
       };
+
 
       console.log("Updating question:", questionData);
 

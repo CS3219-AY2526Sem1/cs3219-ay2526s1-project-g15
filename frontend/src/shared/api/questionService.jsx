@@ -6,13 +6,44 @@ function authHeaders() {
 }
 
 async function fetchJson(url, init = {}) {
-  const res = await fetch(url, {
-    ...init,
-    headers: { Accept: 'application/json', ...(init.headers || {}) },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
+  let res;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { Accept: 'application/json', ...(init.headers || {}) },
+    });
+  } catch (err) {
+    // This is the "Failed to fetch" case: browser never got a response
+    const e = new Error(`Question already exists! Please choose a different question name.`);
+    e.isNetworkError = true;
+    throw e;
+  }
+
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!res.ok) {
+    const backendMsg =
+      (data && (data.detail || data.message || data.error)) ||
+      (typeof data === 'string' ? data : null);
+
+    const e = new Error(
+      backendMsg || `Request failed with status ${res.status}`
+    );
+    e.status = res.status;
+    e.data = data;
+    throw e;
+  }
+
+  return data;
 }
+
+
 
 export const questionService = {
   async getQuestions(params = {}) {
