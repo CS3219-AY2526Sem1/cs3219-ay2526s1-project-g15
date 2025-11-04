@@ -30,7 +30,7 @@ services:
     image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
     command: >
       /cloud_sql_proxy
-      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:0.0.0.0:5436
+      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:0.0.0.0:5435
       -credential_file=/secrets/cloudsql/credentials.json
     volumes:
       - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
@@ -41,7 +41,7 @@ services:
     image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
     command: >
       /cloud_sql_proxy
-      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:0.0.0.0:5435
+      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:0.0.0.0:5436
       -credential_file=/secrets/cloudsql/credentials.json
     volumes:
       - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
