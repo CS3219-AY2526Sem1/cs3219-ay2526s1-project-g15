@@ -25,22 +25,22 @@ services:
     networks:
       - appnet
 
-  cloudsql-proxy-questions:
+  cloudsql-proxy-matching:
     image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
     command: >
       /cloud_sql_proxy
-      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:0.0.0.0:5435
+      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:0.0.0.0:5436
       -credential_file=/secrets/cloudsql/credentials.json
     volumes:
       - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
     networks:
       - appnet
 
-  cloudsql-proxy-matching:
+  cloudsql-proxy-questions:
     image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
     command: >
       /cloud_sql_proxy
-      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:0.0.0.0:5436
+      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:0.0.0.0:5435
       -credential_file=/secrets/cloudsql/credentials.json
     volumes:
       - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
@@ -70,27 +70,6 @@ services:
     depends_on:
       - cloudsql-proxy-users
 
-  question-service:
-    build: ./services/question-service
-    container_name: question-service
-    environment:
-      - ENV=dev
-      - HOST=0.0.0.0
-      - PORT=8003
-      - DATABASE_URL=postgresql+psycopg2://postgres:${QS_PASSWORD}@cloudsql-proxy-questions:5435/peerprep_questions
-      - USER_SERVICE_URL=http://user-service:8001
-      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
-    expose:
-      - "8003"
-    ports:
-      - "8003:8003"
-    depends_on:
-      - postgres
-      - cloudsql-proxy-questions
-    networks:
-      - appnet
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
-
   matching-service:
     build: ./services/matching-service
     container_name: matching-service
@@ -98,7 +77,7 @@ services:
       - ENV=dev
       - HOST=0.0.0.0
       - PORT=8002
-      - DATABASE_URL=postgresql+psycopg://postgres:${MS_PASSWORD}@cloudsql-proxy-matching:5436/matching_db
+      - DATABASE_URL=postgresql+psycopg://postgres:${MS_PASSWORD}@cloudsql-proxy-matching:5435/matching_db
       - REDIS_URL=redis://redis:6379/0
       - AUTH_ACCESS_SECRET=secretkey
       - AUTH_ALGORITHM=HS256
@@ -119,6 +98,27 @@ services:
       - cloudsql-proxy-matching
     networks:
       - appnet
+
+  question-service:
+    build: ./services/question-service
+    container_name: question-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8003
+      - DATABASE_URL=postgresql+psycopg2://postgres:${QS_PASSWORD}@cloudsql-proxy-questions:5436/peerprep_questions
+      - USER_SERVICE_URL=http://user-service:8001
+      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+    expose:
+      - "8003"
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+      - cloudsql-proxy-questions
+    networks:
+      - appnet
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
 
   collaboration-service:
     build: ./services/collaboration-service
