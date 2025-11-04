@@ -1,8 +1,9 @@
-FROM python:3.11-slim
+# Slim version causes issues with psycopg installation
+FROM python:3.11
 
-# System deps for psycopg3
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc libpq-dev curl && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc libpq-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
