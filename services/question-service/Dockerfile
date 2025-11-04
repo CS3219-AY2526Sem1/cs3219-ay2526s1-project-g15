@@ -1,4 +1,4 @@
-# Slim version causes issues with psycopg installation
+# Slim version causes issues with gcc installation
 FROM python:3.11
 
 RUN apt-get update && \
