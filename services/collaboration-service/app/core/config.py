@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "peerprep-collaboration-service"
     ENV: str = "dev"
     HOST: str = "localhost"
-    PORT: int = 8003
+    PORT: int = 8004
     DEBUG: bool = True
 
     # Database settings
