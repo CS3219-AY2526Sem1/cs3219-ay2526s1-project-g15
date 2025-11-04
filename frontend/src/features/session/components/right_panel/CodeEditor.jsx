@@ -39,7 +39,7 @@ export default function CodeEditor({
   height = "520px",
   onRun,
   onSubmit,
-  expectedFnName = "",      // 👈 new
+  expectedFnName = "",      
   isRunning = false,        // you already pass it
 }) {
   const [localRunning, setLocalRunning] = useState(false);
