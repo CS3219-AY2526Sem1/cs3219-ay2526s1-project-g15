@@ -1,15 +1,26 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 
 const LABELS = {
   javascript: "JavaScript",
-  typescript: "TypeScript",
   python: "Python",
-  java: "Java",
 };
 
 function langBadge(lang) {
   return (lang?.slice(0, 2) || "js").toUpperCase();
+}
+
+// build display signature from name + lang
+function buildSignature(name, lang) {
+  if (!name) return "";
+  switch (lang) {
+    case "python":
+      return `def ${name}(...):`;
+    case "javascript":
+      return `function ${name}(...args) {}`;
+    default:
+      return name;
+  }
 }
 
 export default function CodeEditor({
@@ -17,19 +28,18 @@ export default function CodeEditor({
   onChange,
   language = "javascript",
   onLanguageChange,
-  languages = ["javascript", "typescript", "python", "java"],
+  languages = ["javascript", "python"],
   filename = "index.js",
   height = "520px",
   onRun,
   onSubmit,
-  avatarSrc,
-  avatarText = "S",
+  expectedFnName = "",      
+  isRunning = false,        
 }) {
   const [localRunning, setLocalRunning] = useState(false);
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
-  // define the flags you’re using below
-  const isRunningNow = localRunning;
+  const isRunningNow = isRunning || localRunning;
   const isSubmittingNow = localSubmitting;
   const busy = isRunningNow || isSubmittingNow;
 
@@ -38,7 +48,11 @@ export default function CodeEditor({
     const maybe = onRun(value, language);
     if (maybe && typeof maybe.then === "function") {
       setLocalRunning(true);
-      try { await maybe; } finally { setLocalRunning(false); }
+      try {
+        await maybe;
+      } finally {
+        setLocalRunning(false);
+      }
     }
   }, [onRun, value, language, busy]);
 
@@ -47,7 +61,11 @@ export default function CodeEditor({
     const maybe = onSubmit(value, language);
     if (maybe && typeof maybe.then === "function") {
       setLocalSubmitting(true);
-      try { await maybe; } finally { setLocalSubmitting(false); }
+      try {
+        await maybe;
+      } finally {
+        setLocalSubmitting(false);
+      }
     }
   }, [onSubmit, value, language, busy]);
 
@@ -63,6 +81,11 @@ export default function CodeEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [handleRun]);
+
+  const displaySignature = useMemo(
+    () => buildSignature(expectedFnName, language),
+    [expectedFnName, language]
+  );
 
   return (
     <div className="rounded-2xl border border-gray-300 overflow-hidden">
@@ -91,7 +114,7 @@ export default function CodeEditor({
           </select>
         </div>
 
-        {/* actions + avatar */}
+        {/* actions */}
         <div className="inline-flex items-center gap-2">
           {/* Run */}
           <button
@@ -106,8 +129,8 @@ export default function CodeEditor({
           >
             {isRunningNow ? (
               <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin text-white" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity=".25" strokeWidth="4"/>
-                <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" strokeWidth="4"/>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity=".25" strokeWidth="4" />
+                <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" strokeWidth="4" />
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" className="h-4 w-4 text-gray-300 group-hover:text-white" fill="currentColor">
@@ -126,21 +149,15 @@ export default function CodeEditor({
           >
             {isSubmittingNow ? "Submitting..." : "Submit"}
           </button>
-
-          {/* Avatar */}
-          {avatarSrc ? (
-            <img
-              src={avatarSrc}
-              alt="you"
-              className="h-6 w-6 rounded-full object-cover ring-2 ring-[#1a192b]"
-            />
-          ) : (
-            <div className="h-6 w-6 rounded-full bg-[#5a5989] text-white grid place-items-center text-xs ring-2 ring-[#5a5989]">
-              {avatarText}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* function signature hint */}
+      {displaySignature && (
+        <div className="bg-[#111827] text-gray-200 text-xs px-3 py-1 border-t border-gray-700 font-mono">
+          Implement: <span className="text-emerald-200">{displaySignature}</span>
+        </div>
+      )}
 
       <Editor
         height={height}

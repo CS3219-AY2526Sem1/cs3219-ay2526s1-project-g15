@@ -49,7 +49,8 @@ class QuestionFetcher:
         self.duplicate_count = 0
         self.error_count = 0
         self.start_time = datetime.now()
-        self.current_question_number = 43
+        self.current_skip = 0  # For batch pagination
+        self.BATCH_SIZE = 5
 
     def log(self, message: str, level: str = "INFO"):
         """Log with timestamp, safely handling invalid Unicode characters"""
@@ -58,30 +59,26 @@ class QuestionFetcher:
         safe_message = message.encode("utf-8", errors="replace").decode("utf-8")
         print(f"[{timestamp}] [{level}] {safe_message}")
 
-    def fetch_question_by_number(self, question_num: int) -> Optional[Dict[str, Any]]:
-        """Fetch question details by problem number"""
+    def fetch_questions_batch(self, skip: int, limit: int) -> list:
+        """Fetch a batch of questions using skip/limit"""
         try:
-            print(f"[DEBUG] About to request: {ALFA_LEETCODE_API}/problems?limit=1&skip={question_num - 1}")
+            print(f"[DEBUG] About to request: {ALFA_LEETCODE_API}/problems?limit={limit}&skip={skip}")
             response = requests.get(
                 f"{ALFA_LEETCODE_API}/problems",
-                params={"limit": 1, "skip": question_num - 1},
+                params={"limit": limit, "skip": skip},
                 timeout=REQUEST_TIMEOUT
             )
             print(f"[DEBUG] Response received: status_code={response.status_code}")
-
             if response.status_code == 200:
                 data = response.json()
                 problems = data.get('problemsetQuestionList', [])
-                if problems:
-                    print(f"[DEBUG] Problem found: {problems[0].get('title', 'No title')}")
-                    return problems[0]
-
+                print(f"[DEBUG] Batch size received: {len(problems)}")
+                return problems
             print(f"[DEBUG] No problems found or bad status code.")
-            return None
-
+            return []
         except Exception as e:
-            self.log(f"Error fetching question {question_num}: {e}", "ERROR")
-            return None
+            self.log(f"Error fetching batch (skip={skip}): {e}", "ERROR")
+            return []
 
     def check_if_exists(self, title: str) -> bool:
         """Check if question already exists in database"""
@@ -141,18 +138,21 @@ class QuestionFetcher:
             examples = []
             if 'exampleTestcases' in detail_data and detail_data['exampleTestcases']:
                 test_cases = detail_data.get('exampleTestcases', '').strip().split('\n')
+                # Group every two lines: first line is input (array), second is output (target)
                 for i in range(0, len(test_cases), 2):
                     if i + 1 < len(test_cases):
+                        input_str = test_cases[i].strip()
+                        output_str = test_cases[i + 1].strip()
                         examples.append({
-                            "input": test_cases[i].strip(),
-                            "output": test_cases[i + 1].strip(),
+                            "input": input_str,
+                            "output": output_str,
                             "explanation": ""
                         })
 
             # Create question object
             question = Question(
                 title=title,
-                description=detail_data.get('content', '').replace('<p>', '').replace('</p>', '\n').replace('<strong>', '**').replace('</strong>', '**'),
+                description=detail_data.get('question', ''),  # Store raw HTML
                 difficulty=difficulty,
                 topics=json.dumps(topics),
                 examples=json.dumps(examples) if examples else None,
@@ -171,10 +171,12 @@ class QuestionFetcher:
             self.fetched_count += 1
             return True
 
-        except IntegrityError:
+        except IntegrityError as ie:
             print("[DEBUG] IntegrityError encountered, rolling back DB session...")
             self.db.rollback()
-            self.log(f"Duplicate detected for '{title}', skipping", "WARN")
+            # Use problem title if available, else 'Unknown'
+            safe_title = problem.get('title', 'Unknown')
+            self.log(f"Duplicate detected for '{safe_title}', skipping", "WARN")
             self.duplicate_count += 1
             return True
         except Exception as e:
@@ -240,14 +242,14 @@ class QuestionFetcher:
         print(f"✅ Successfully fetched: {self.fetched_count}")
         print(f"🔁 Duplicates skipped: {self.duplicate_count}")
         print(f"❌ Failed/Skipped: {self.skipped_count}")
-        print(f"📝 Current question number: {self.current_question_number}")
+        print(f"📝 Current batch skip: {self.current_skip}")
         print("="*60 + "\n")
 
     def run(self):
-        """Main loop - fetch questions continuously"""
+        """Main loop - fetch questions in batches, then fetch details for each titleSlug"""
         try:
-            self.log("\uD83D\uDE80 Starting continuous question fetcher...")
-            self.log(f"Configuration: {DELAY_BETWEEN_QUESTIONS}s delay, {MAX_RETRIES} retries")
+            self.log("\uD83D\uDE80 Starting continuous question fetcher (batch mode)...")
+            self.log(f"Configuration: batch size {self.BATCH_SIZE}, {DELAY_BETWEEN_QUESTIONS}s delay, {MAX_RETRIES} retries")
 
             if MAX_QUESTIONS:
                 self.log(f"Will stop after successfully fetching {MAX_QUESTIONS} questions")
@@ -260,28 +262,27 @@ class QuestionFetcher:
                     self.print_stats()
                     break
 
-                # Fetch next question by number
-                self.log(f"[Question #{self.current_question_number}] Fetching from API...")
+                # Fetch a batch of questions
+                self.log(f"[Batch skip={self.current_skip}] Fetching batch from API...")
+                problems = self.fetch_questions_batch(self.current_skip, self.BATCH_SIZE)
 
-                problem = self.fetch_question_by_number(self.current_question_number)
+                if not problems:
+                    self.log(f"No questions found at skip={self.current_skip}, stopping.", "WARN")
+                    break
 
-                if problem:
-                    # Fetch with retry
+                for idx, problem in enumerate(problems):
+                    if MAX_QUESTIONS and self.fetched_count >= MAX_QUESTIONS:
+                        break
+                    self.log(f"[Batch {self.current_skip} | {idx+1}/{len(problems)}] Processing: {problem.get('title', 'Unknown')}")
                     self.fetch_single_question_with_retry(problem)
-                else:
-                    self.log(f"No question found at position {self.current_question_number}, skipping", "WARN")
-                    self.skipped_count += 1
+                    # Short delay between detail fetches to respect rate limits
+                    time.sleep(DELAY_BETWEEN_QUESTIONS)
 
-                # Move to next question
-                self.current_question_number += 1
+                self.current_skip += self.BATCH_SIZE
 
                 # Print stats every 10 questions
-                if self.current_question_number % 10 == 0:
+                if self.current_skip % 10 == 0:
                     self.print_stats()
-
-                # Rate limiting delay
-                self.log(f"Waiting {DELAY_BETWEEN_QUESTIONS}s before next fetch...")
-                time.sleep(DELAY_BETWEEN_QUESTIONS)
 
         except KeyboardInterrupt:
             self.log("\n\n🛑 Received shutdown signal (Ctrl+C)", "INFO")

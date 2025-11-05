@@ -90,7 +90,7 @@ class QuestionService:
             if filters.topics:
                 topic_conditions = []
                 for topic in filters.topics:
-                    topic_conditions.append(Question.topics.contains(f'"{topic}"'))
+                    topic_conditions.append(Question.topics.ilike(f'%"{topic}"%'))
                 query = query.filter(or_(*topic_conditions))
 
             if filters.search:
