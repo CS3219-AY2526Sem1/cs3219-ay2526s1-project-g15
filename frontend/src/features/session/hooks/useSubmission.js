@@ -4,37 +4,62 @@ export default function useSubmission(sessionId, userId, username) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitBanner, setSubmitBanner] = useState("");
 
-  const submitSolution = async (src, lang) => {
+  function getAccessToken() {
+    return localStorage.getItem("accessToken");
+  }
+
+  const submitAttempt = async ({ questionId, language, code, passed, total }) => {
     setIsSubmitting(true);
     setSubmitBanner("Submitting solution...");
-    /* try {
-      const base = import.meta.env.VITE_API_GATEWAY_URL || "";
-      const res = await fetch(`${base}/api/submissions`, {
+
+    try {
+      const url = `http://localhost:8080/api/v1/attempts/`;
+      console.log("Submitting to URL:", url);
+
+      const token = getAccessToken();
+      const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          sessionId,
-          userId,
-          username,
-          language: lang,
-          source: src,
-          problem: { id: "141", slug: "linked-list-cycle" }, // MOCK
+          question_id: Number(questionId),
+          language,
+          submitted_code: code,
+          passed_tests: Number(passed),
+          total_tests: Number(total),
         }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await res.json().catch(() => ({}));
+      if (!response.ok) {
+        const msg = await response.text().catch(() => "");
+        throw new Error(`HTTP ${response.status}${msg ? ` – ${msg}` : ""}`);
+      }
 
-      setSubmitBanner("Solution submitted successfully!");
+      const data = await response.json().catch(() => ({}));
+      setSubmitBanner("Solution saved!");
       setTimeout(() => setSubmitBanner(""), 2500);
-    } catch (err) {
-      setSubmitBanner(`Submission failed: ${err.message}`);
-      setTimeout(() => setSubmitBanner(""), 3000);
+      return data;
+    } catch (error) {
+      setSubmitBanner(`Submission failed: ${error.message}`);
+      setTimeout(() => setSubmitBanner(""), 3500);
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
-      */
   };
+
+  const submitSolution = async (payload) => {
+    const adaptedPayload = {
+      questionId: payload?.questionId,
+      language: payload?.language,
+      code: payload?.code,
+      passed: payload?.passedTestCases,
+      total: payload?.totalTestCases,
+    };
+    return submitAttempt(adaptedPayload);
+  }
     
   return { submitSolution, isSubmitting, submitBanner, setSubmitBanner };
 }

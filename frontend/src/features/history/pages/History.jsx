@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../../home/components/OngoingMeetingCard";
+import { listMyAttempts, myAttemptsSummary } from "../../../shared/api/attemptsApi";
+import { questionService } from "../../../shared/api/questionService";
 
 const CheckIcon = ({ className = "" }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
@@ -16,24 +18,54 @@ const DIFF_COLOR = {
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// TODO: change fake, hardcoded data to data that is in database
-const INITIAL = [
-  { id: 1, title: "Interview Question 1", topic: "Arrays",       difficulty: "Easy",      solved: true  },
-  { id: 2, title: "Interview Question 2", topic: "Strings",      difficulty: "Easy",      solved: false },
-  { id: 3, title: "Interview Question 3", topic: "Graphs",       difficulty: "Medium",    solved: false },
-  { id: 4, title: "Interview Question 4", topic: "Linked Lists", difficulty: "Easy",      solved: false },
-  { id: 5, title: "Interview Question 5", topic: "DP",           difficulty: "Difficult", solved: true  },
-  { id: 6, title: "Interview Question 6", topic: "Trees",        difficulty: "Difficult", solved: false },
-  { id: 7, title: "Interview Question 7", topic: "Greedy",       difficulty: "Medium",    solved: false },
-  { id: 8, title: "Interview Question 8", topic: "Math",         difficulty: "Medium",    solved: false },
-];
-
 export default function History() {
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [q, setQ] = useState("");
-  const [items] = useState(INITIAL);
+  const [items, setItems] = useState([]);
 
-  const solvedCount = items.filter((i) => i.solved).length;
+  const [solvedCount, setSolvedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+
+        const attempts = (await listMyAttempts({ limit: 200, offset: 0 }))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        const summary = await myAttemptsSummary().catch(() => null);
+        setSolvedCount(summary?.solved ?? attempts.filter(a => a.is_solved).length);
+
+        const questionIds = [...new Set(attempts.map(a => a.question_id))];
+        const questions = await Promise.all(
+          questionIds.map(id => questionService.getQuestion(id).catch(() => null))
+        );
+
+        const questionMap = Object.fromEntries(
+          questions.filter(Boolean).map(q => [q.id, q])
+        );
+
+        const ui = attempts.map((a, idx) => {
+          const q = questionMap[a.question_id];
+          return {
+            id: idx + 1,
+            title: q?.title ?? `Question #${a.question_id}`,
+            topic: (q?.topics && q.topics[0]) || "-",
+            difficulty: q?.difficulty || "-",
+            solved: !!a.is_solved,
+          };
+        });
+        setItems(ui);
+      } catch (err) {
+        console.error("Failed to load attempts:", err);
+        setItems([]);
+        setSolvedCount(0);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
   // TODO: change to questions that are in database
   const TOTAL_POOL = 4829;
 
@@ -65,7 +97,7 @@ export default function History() {
                 <div className="relative w-full max-w-md">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/80">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="11" cy="11" r="7" />
+                      <circle cx="11" cy="11" r="7" /> 
                       <path d="M21 21l-4.3-4.3" />
                     </svg>
                   </span>
