@@ -122,4 +122,9 @@ export const questionService = {
   async getTopics() {
     return fetchJson(`${API_BASE}topics`, { headers: authHeaders() });
   },
+
+  async getTotalCount() {
+    const data = await fetchJson(`${API_BASE}count`, { headers: authHeaders() });
+    return data?.total ?? 0;
+  },
 };

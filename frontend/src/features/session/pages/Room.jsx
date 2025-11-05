@@ -269,8 +269,6 @@ export default function Room() {
 };
 
 
-
-
   const handleEndSession = () => {
     setShowLeaveConfirm(true);
   };

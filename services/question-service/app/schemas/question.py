@@ -152,3 +152,5 @@ class QuestionFilter(BaseModel):
     search: Optional[str] = None
 
 
+class QuestionCountResponse(BaseModel):
+    total: int
