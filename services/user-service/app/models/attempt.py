@@ -1,5 +1,4 @@
-from uuid import UUID as PyUUID, uuid4
-from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 from typing import Optional
 from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 from sqlalchemy import (
@@ -18,7 +17,7 @@ class Attempt(Base):
         String, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
 
-    question_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    question_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False)
     submitted_code: Mapped[str] = mapped_column(Text, nullable=False)
     passed_tests: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -42,7 +41,7 @@ class UserQuestionStatus(Base):
     user_id:  Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    question_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    question_id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     best_runtime_ms: Mapped[Optional[int]] = mapped_column(Integer)
     solved_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))

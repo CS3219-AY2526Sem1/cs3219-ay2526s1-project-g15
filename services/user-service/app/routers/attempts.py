@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
-from uuid import UUID
 
 from app.db.session import get_session
 from app.models.attempt import Attempt, UserQuestionStatus
@@ -76,7 +75,7 @@ async def list_my_attempts(
 ):
     res = await db.execute(
         select(Attempt)
-        .where(Attempt.user_id == user["id"])
+        .where(Attempt.user_id == user.id)
         .order_by(Attempt.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -106,7 +105,7 @@ async def attempts_summary(
             func.count(),
             func.sum(case((Attempt.passed_tests == Attempt.total_tests, 1), else_=0)),
             func.max(Attempt.created_at),
-        ).where(Attempt.user_id == user["id"])
+        ).where(Attempt.user_id == user.id)
     )
     total, solved, last = res.one()
     return AttemptSummary(
