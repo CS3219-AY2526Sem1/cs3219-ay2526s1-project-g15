@@ -1,43 +1,23 @@
 import { useState } from "react";
+import { createAttempt } from "../../../shared/api/attemptsApi";
 
 export default function useSubmission(sessionId, userId, username) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitBanner, setSubmitBanner] = useState("");
-
-  function getAccessToken() {
-    return localStorage.getItem("accessToken");
-  }
 
   const submitAttempt = async ({ questionId, language, code, passed, total }) => {
     setIsSubmitting(true);
     setSubmitBanner("Submitting solution...");
 
     try {
-      const url = `http://localhost:8080/api/v1/attempts/`;
-      console.log("Submitting to URL:", url);
-
-      const token = getAccessToken();
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          question_id: Number(questionId),
-          language,
-          submitted_code: code,
-          passed_tests: Number(passed),
-          total_tests: Number(total),
-        }),
+      const data = await createAttempt({
+        question_id: questionId,
+        language,
+        submitted_code: code,
+        passed_tests: passed,
+        total_tests: total,
       });
 
-      if (!response.ok) {
-        const msg = await response.text().catch(() => "");
-        throw new Error(`HTTP ${response.status}${msg ? ` – ${msg}` : ""}`);
-      }
-
-      const data = await response.json().catch(() => ({}));
       setSubmitBanner("Solution saved!");
       setTimeout(() => setSubmitBanner(""), 2500);
       return data;

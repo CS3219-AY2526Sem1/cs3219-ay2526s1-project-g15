@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../../home/components/OngoingMeetingCard";
 import { listMyAttempts, myAttemptsSummary } from "../../../shared/api/attemptsApi";
-import { questionService } from "../../../shared/api/questionService";
+import { questionService, countQuestions } from "../../../shared/api/questionService";
 
 const CheckIcon = ({ className = "" }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
@@ -25,6 +25,7 @@ export default function History() {
 
   const [solvedCount, setSolvedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [totalPool, setTotalPool] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -64,10 +65,14 @@ export default function History() {
       } finally {
         setLoading(false);
       }
+      try {
+        const total = questionService.getTotalCount();
+        setTotalPool(total);
+      } catch (e) {
+        console.warn("countQuestions failed:", e);
+      }
     })();
   }, []);
-  // TODO: change to questions that are in database
-  const TOTAL_POOL = 4829;
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -112,7 +117,7 @@ export default function History() {
 
                 <div className="flex items-center gap-2 text-sm text-gray-700">
                   <CheckIcon className="h-6 w-6 text-[#4C8954]" />
-                  <span>{solvedCount}/{TOTAL_POOL} attempts solved</span>
+                  <span>{solvedCount}/{totalPool} attempts solved</span>
                 </div>
               </div>
 
