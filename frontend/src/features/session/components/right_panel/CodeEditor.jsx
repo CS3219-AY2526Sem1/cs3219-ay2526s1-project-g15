@@ -10,7 +10,7 @@ function langBadge(lang) {
   return (lang?.slice(0, 2) || "js").toUpperCase();
 }
 
-// small utility: build a display signature from name + lang
+// build display signature from name + lang
 function buildSignature(name, lang) {
   if (!name) return "";
   switch (lang) {
@@ -34,12 +34,11 @@ export default function CodeEditor({
   onRun,
   onSubmit,
   expectedFnName = "",      
-  isRunning = false,        // you already pass it
+  isRunning = false,        
 }) {
   const [localRunning, setLocalRunning] = useState(false);
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
-  // define the flags you’re using below
   const isRunningNow = isRunning || localRunning;
   const isSubmittingNow = localSubmitting;
   const busy = isRunningNow || isSubmittingNow;
@@ -153,7 +152,7 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* 👇 NEW: function signature hint */}
+      {/* function signature hint */}
       {displaySignature && (
         <div className="bg-[#111827] text-gray-200 text-xs px-3 py-1 border-t border-gray-700 font-mono">
           Implement: <span className="text-emerald-200">{displaySignature}</span>

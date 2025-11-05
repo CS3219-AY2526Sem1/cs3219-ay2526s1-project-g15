@@ -1,10 +1,7 @@
-// harnessbuilder.js
-
 import { toArgsFromRelaxed } from "./ioFormat";
 
 /**
  * Extract function name from question title
- * "Two Sum" -> "twoSum", "Linked List Cycle" -> "linkedListCycle"
  */
 function getFunctionName(title) {
   const parts = (title || "")
@@ -27,8 +24,7 @@ function getFunctionName(title) {
 }
 
 /**
- * Generate helper classes for data structures
- * Users can call these in their code to build test data
+ * Generate helper classes for data structures so users can call these in their code
  */
 function getPreludeForTopics(topics, lang) {
   const hasLinkedList = topics.some((t) => t.toLowerCase().includes("linked list"));
@@ -39,7 +35,7 @@ function getPreludeForTopics(topics, lang) {
   if (lang === "javascript") {
     let prelude = "";
     if (hasLinkedList) {
-      // define these only if user/code hasn't already defined them
+      // define these only if user hasn't already defined them
       prelude += `
 if (typeof globalThis.ListNode === "undefined") {
   globalThis.ListNode = class ListNode {
@@ -119,7 +115,7 @@ if (typeof globalThis.buildTree === "undefined") {
     return prelude;
   }
 
-  // python branch stays the same
+  // python
   if (lang === "python") {
     let prelude = "";
     if (hasLinkedList) {
@@ -187,33 +183,34 @@ def build_tree(arr):
   return "";
 }
 
-
 /**
  * Parse test case inputs from various formats
  */
 function parseTestCaseInput(tc) {
-  // Case 1: String input
+  // String input
   if (typeof tc.input === "string") {
     const trimmed = tc.input.trim();
-    
+
     // If it looks like JSON array/object notation, parse it
-    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-        (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+    if (
+      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+      (trimmed.startsWith("{") && trimmed.endsWith("}"))
+    ) {
       const args = toArgsFromRelaxed(tc.input);
       return args && args.length ? args : [];
     }
-    
-    // Otherwise, treat it as a single string argument
+
+    // Else, treat it as a single string argument
     return [tc.input];
   }
 
-  // Case 2: Not an object or missing
+  // Not an object or missing
   if (!tc.input || typeof tc.input !== "object") return [];
 
-  // Case 3: Already an array
+  //  Already an array
   if (Array.isArray(tc.input)) return tc.input;
 
-  // Case 4: Object with values that might be JSON strings
+  // Object with values that might be JSON strings
   const parsedValues = Object.values(tc.input).map((val) => {
     if (typeof val === "string") {
       try {
@@ -227,6 +224,9 @@ function parseTestCaseInput(tc) {
   return parsedValues;
 }
 
+/**
+ * JS/TS harness — UPDATED to handle in-place functions (e.g. nextPermutation)
+ */
 function buildHarnessJSorTS(src, question) {
   const functionName = getFunctionName(question.title);
   const prelude = getPreludeForTopics(question.topics || [], "javascript");
@@ -247,8 +247,18 @@ const __tests = ${serialized};
 for (let i = 0; i < __tests.length; i++) {
   const args = __tests[i];
   try {
+    // call user fn
     const __out = ${functionName}(...args);
-    console.log(JSON.stringify({ case: i + 1, out: __out }));
+
+    // default to return value
+    let __result = __out;
+
+    // in-place fn (returns undefined): show mutated first arg
+    if (typeof __out === "undefined") {
+      __result = Array.isArray(args[0]) ? args[0] : args[0];
+    }
+
+    console.log(JSON.stringify({ case: i + 1, out: __result }));
   } catch (e) {
     console.log(JSON.stringify({ case: i + 1, error: String(e) }));
   }
@@ -256,12 +266,16 @@ for (let i = 0; i < __tests.length; i++) {
 `;
 }
 
+/**
+ * Python harness. Made sure that it handles in-place functions (return None)
+ */
 function buildHarnessPy(src, question) {
   const functionName = getFunctionName(question.title);
   const prelude = getPreludeForTopics(question.topics || [], "python");
   const testCases = question.test_cases || [];
 
   const argsArrays = testCases.map(parseTestCaseInput);
+  // escape for embedding in Python string
   const serialized = JSON.stringify(argsArrays)
     .replace(/\\/g, "\\\\")
     .replace(/'/g, "\\'");
@@ -279,7 +293,11 @@ __tests = json.loads('${serialized}')
 for i, args in enumerate(__tests):
     try:
         __out = ${functionName}(*args)
-        print(json.dumps({"case": i+1, "out": __out}))
+        __result = __out
+        # in-place fn (returns None): show mutated first arg
+        if __out is None and len(args) > 0:
+            __result = args[0]
+        print(json.dumps({"case": i+1, "out": __result}))
     except Exception as e:
         print(json.dumps({"case": i+1, "error": str(e)}))
 `;
@@ -296,7 +314,7 @@ function buildHarness(src, lang, question) {
     throw new Error("No test cases provided");
   }
 
-  if (lang === "javascript") return buildHarnessJSorTS(src, question);
+  if (lang === "javascript" || lang === "typescript") return buildHarnessJSorTS(src, question);
   if (lang === "python") return buildHarnessPy(src, question);
   return src;
 }

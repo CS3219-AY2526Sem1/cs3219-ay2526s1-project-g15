@@ -13,7 +13,6 @@ async function fetchJson(url, init = {}) {
       headers: { Accept: 'application/json', ...(init.headers || {}) },
     });
   } catch (err) {
-    // This is the "Failed to fetch" case: browser never got a response
     const e = new Error(`Question already exists! Please choose a different question name.`);
     e.isNetworkError = true;
     throw e;

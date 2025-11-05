@@ -193,7 +193,7 @@ export default function AddQuestion() {
 
     setSubmitting(true);
 
-    // --- strict JSON validation for test cases ---
+    //  JSON validation for test cases
     const tcErrors = {};
     const parsedTestCases = [];
 
@@ -399,7 +399,7 @@ export default function AddQuestion() {
                       );
                     })}
 
-                    {/* add-topic */}
+                    {/* add topic */}
                     {!isAddingTopic ? (
                       <button
                         type="button"

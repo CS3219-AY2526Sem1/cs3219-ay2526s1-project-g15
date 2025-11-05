@@ -1,9 +1,4 @@
-// ---- Core display helper (new) ----
 // makes values look nice on the frontend
-// - numbers/bools -> as-is
-// - arrays -> [1, 2, 3]
-// - strings that are actually JSON -> parsed & displayed nicely
-// - objects -> compact JSON (or handled by prettyPrintInput below)
 export function formatScalarDisplay(val) {
   if (val == null) return "null";
 
@@ -12,12 +7,12 @@ export function formatScalarDisplay(val) {
     return String(val);
   }
 
-  // arrays → [a, b, c]
+  // arrays 
   if (Array.isArray(val)) {
     return `[${val.map((item) => formatScalarDisplay(item)).join(", ")}]`;
   }
 
-  // strings: might be JSON, might be plain
+  // strings might be JSON or plain
   if (typeof val === "string") {
     const trimmed = val.trim();
     // try strict JSON
@@ -25,9 +20,9 @@ export function formatScalarDisplay(val) {
       const parsed = JSON.parse(trimmed);
       return formatScalarDisplay(parsed);
     } catch {
-      // not JSON
+      // if not JSON
     }
-    // if it already looks like array/object, show as-is
+    // if it already looks like array/object, show as it is
     if (
       (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
       (trimmed.startsWith("{") && trimmed.endsWith("}"))
@@ -45,15 +40,14 @@ export function formatScalarDisplay(val) {
   return String(val);
 }
 
-// ---- Pretty Printers (updated) ----
 export function prettyPrintInput(input) {
-  // object (not array) → key = value per line
+  // object (not array) --> key = value per line
   if (input && typeof input === "object" && !Array.isArray(input)) {
     return Object.entries(input)
       .map(([k, v]) => `${k} = ${formatScalarDisplay(v)}`)
       .join("\n");
   }
-  // everything else → nice scalar display
+  // everything else --> nice scalar display
   return formatScalarDisplay(input);
 }
 
@@ -62,39 +56,39 @@ export function prettyPrintOutput(out) {
   return formatScalarDisplay(out);
 }
 
-// tries to parse strings like JSON or your relaxed "a=[1,2], b=9"
-// then returns the *pretty* version, not raw JSON.stringify
+// tries to parse strings like JSON or things like "a=[1,2], b=9"
+// then returns the pretty version, not raw JSON.stringify
 export function prettifyIfParsable(str) {
   if (typeof str !== "string") return str;
   const trimmed = str.trim();
 
-  // 1) try strict JSON
+  // try strict JSON
   try {
     const parsed = JSON.parse(trimmed);
     return formatScalarDisplay(parsed);
   } catch {}
 
-  // 2) try relaxed
+  // try relaxed
   const relaxed = parseRelaxed(trimmed);
   if (relaxed !== null) return prettyPrintInput(relaxed);
 
-  // 3) leave as-is
+  // leave as-is
   return str;
 }
 
-// ---- Relaxed parser: JSON OR "a=[1,2], b=9" (unchanged logic) ----
+// JSON or "a=[1,2], b=9" 
 export function parseRelaxed(str) {
   if (!str || typeof str !== "string") return null;
 
-  // Keep an original for fallback attempts
+  // Keep original for fallback attempts
   const original = str.trim();
 
-  // 1) Try strict JSON first
+  // Try strict JSON first
   try {
     return JSON.parse(original);
   } catch {}
 
-  // 2) Normalize simple arrays/primitives: single quotes, trailing commas
+  // Normalize simple arrays/primitives: single quotes, trailing commas
   {
     let t = original;
 
@@ -119,8 +113,7 @@ export function parseRelaxed(str) {
     }
   }
 
-  // 3) Assignment-style: allow newlines and commas as separators
-  //    Convert "x = 1, y = [2,3]" → object
+  // allow newlines and commas as separators
   const s = original.replace(/\n+/g, ",");
 
   // Split on top-level commas
@@ -159,7 +152,7 @@ export function parseRelaxed(str) {
         (val.startsWith("{") && val.endsWith("}"))
       ) {
         obj[key] = JSON.parse(
-          // normalize single-quoted strings inside
+          // normalise single-quoted strings inside
           val
             .replace(
               /'([^'\\]*(\\.[^'\\]*)*)'/g,
@@ -189,11 +182,11 @@ export function parseRelaxed(str) {
   return Object.keys(obj).length ? obj : null;
 }
 
-// ---- Helper: turn relaxed input into ordered args array ----
+// turn relaxed input into ordered args array 
 export function toArgsFromRelaxed(input) {
   const parsed = parseRelaxed(input);
   if (parsed === null || parsed === undefined) return [];
-  if (Array.isArray(parsed)) return [parsed]; // single-arg: the array
+  if (Array.isArray(parsed)) return [parsed];
   if (typeof parsed === "object") return Object.values(parsed); // preserve insertion order
-  return [parsed]; // primitive -> single arg
+  return [parsed]; 
 }

@@ -261,7 +261,7 @@ function solution() {
               )}
             </div>
 
-            {/* RIGHT: Code Editor with Test Cases */}
+            {/* Code Editor with Test Cases */}
             <div className="flex flex-col gap-6">
               {/* Code Editor */}
               <div>

@@ -85,9 +85,9 @@ export default function EditQuestion() {
           topics: data.topics || [],
           tags: data.tags || [],
           constraints: data.constraints || "",
-          // prettify examples as before
+          // prettify examples
           examples: data.examples?.length ? data.examples : [{ input: "", output: "", explanation: "" }],
-          // IMPORTANT: when loading, we pretty-print test cases so the admin sees nice JSON
+          //  when loading, pretty-print test cases so the admin sees nice JSON
           testCases: data.test_cases?.length
             ? data.test_cases.map(tc => ({
                 input: typeof tc.input === "object" ? JSON.stringify(tc.input, null, 2) : (tc.input ?? ""),
@@ -230,7 +230,7 @@ export default function EditQuestion() {
 
     setSubmitting(true);
 
-    // --- strict JSON validation for test cases ---
+    // JSON validation for test cases
     const tcErrors = {};
     const parsedTestCases = [];
 
