@@ -8,7 +8,6 @@ class AttemptCreate(BaseModel):
     submitted_code: str
     passed_tests: int = Field(ge=0)
     total_tests: int  = Field(ge=0)
-    runtime_ms: Optional[int] = None
 
 class AttemptRead(BaseModel):
     id: str
@@ -16,7 +15,6 @@ class AttemptRead(BaseModel):
     language: str
     passed_tests: int
     total_tests: int
-    runtime_ms: Optional[int]
     created_at: datetime
     is_solved: bool
 

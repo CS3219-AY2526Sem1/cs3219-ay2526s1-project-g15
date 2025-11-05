@@ -22,7 +22,6 @@ class Attempt(Base):
     submitted_code: Mapped[str] = mapped_column(Text, nullable=False)
     passed_tests: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     total_tests: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    runtime_ms: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     is_solved: Mapped[bool] = column_property(passed_tests == total_tests)
     user: Mapped[User] = relationship("User", back_populates="attempts")

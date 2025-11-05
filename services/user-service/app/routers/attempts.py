@@ -22,7 +22,6 @@ async def create_attempt(
         submitted_code=payload.submitted_code,
         passed_tests=payload.passed_tests,
         total_tests=payload.total_tests,
-        runtime_ms=payload.runtime_ms,
     )
     db.add(a)
 
@@ -38,17 +37,10 @@ async def create_attempt(
             row = UserQuestionStatus(
                 user_id=user.id,
                 question_id=payload.question_id,
-                best_runtime_ms=payload.runtime_ms,
                 solved_at=func.now(),
             )
             db.add(row)
         else:
-            if row.best_runtime_ms is None or (
-                payload.runtime_ms is not None
-                and row.best_runtime_ms is not None
-                and payload.runtime_ms < row.best_runtime_ms
-            ):
-                row.best_runtime_ms = payload.runtime_ms
             if row.solved_at is None:
                 row.solved_at = func.now()
 
@@ -61,7 +53,6 @@ async def create_attempt(
         language=a.language,
         passed_tests=a.passed_tests,
         total_tests=a.total_tests,
-        runtime_ms=a.runtime_ms,
         created_at=a.created_at,
         is_solved=(a.passed_tests == a.total_tests),
     )
@@ -88,7 +79,6 @@ async def list_my_attempts(
             language=r.language,
             passed_tests=r.passed_tests,
             total_tests=r.total_tests,
-            runtime_ms=r.runtime_ms,
             created_at=r.created_at,
             is_solved=(r.passed_tests == r.total_tests),
         )
