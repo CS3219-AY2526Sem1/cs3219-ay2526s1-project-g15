@@ -85,7 +85,7 @@ class QuestionService:
 
         if filters:
             if filters.difficulty:
-                query = query.filter(Question.difficulty.ilike(str(filters.difficulty).lower()))
+                query = query.filter(Question.difficulty == filters.difficulty)
 
             if filters.topics:
                 topic_conditions = []
