@@ -42,9 +42,7 @@ export default function AdminQuestionView() {
   if (question?.function_name) {
     const templates = {
       javascript: `function ${question.function_name}(/* params */) {\n  // Write your solution here\n  \n}`,
-      typescript: `function ${question.function_name}(...args: any[]): any {\n  // Write your solution here\n  \n}`,
       python: `def ${question.function_name}(...):\n    # Write your solution here\n    pass`,
-      java: `public static Object ${question.function_name}(/* params */) {\n    // Write your solution here\n    return null;\n}`,
     };
     setCode(templates[language] || templates.javascript);
   } else {

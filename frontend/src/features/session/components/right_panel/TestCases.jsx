@@ -8,6 +8,7 @@ export default function TestCases({
   const total = Array.isArray(tests) ? tests.length : 0;
   const current = total > 0 ? tests[activeCase - 1] : null;
 
+  // actual output from runner
   const rawActual = caseOutputs[activeCase];
   const actualDisplay =
     typeof rawActual === "string"
@@ -15,8 +16,23 @@ export default function TestCases({
       : rawActual == null
       ? "..."
       : (() => {
-          try { return JSON.stringify(rawActual, null, 2); } catch { return String(rawActual); }
+          try {
+            return JSON.stringify(rawActual, null, 2);
+          } catch {
+            return String(rawActual);
+          }
         })();
+
+  // helper: always return a string
+  const toDisplay = (val) => {
+    if (typeof val === "string") return val;
+    if (val == null) return "";
+    try {
+      return JSON.stringify(val, null, 2);
+    } catch {
+      return String(val);
+    }
+  };
 
   return (
     <div className="mt-4 rounded-xl bg-[#111827] text-gray-100 p-4">
@@ -49,7 +65,7 @@ export default function TestCases({
           <div className="text-gray-300 mb-1">Expected Output</div>
           <textarea
             readOnly
-            value={current ? current.outputDisplay ?? "" : "..."}
+            value={current ? toDisplay(current.outputDisplay ?? current.output) : "..."}
             className="w-full bg-gray-900 rounded-md px-3 py-2 outline-none resize-none font-mono text-xs"
             rows="3"
           />
@@ -72,7 +88,7 @@ export default function TestCases({
           <div className="text-gray-300 mb-1">Input</div>
           <textarea
             readOnly
-            value={current.inputDisplay ?? ""}
+            value={toDisplay(current.inputDisplay ?? current.input)}
             className="w-full bg-gray-900 rounded-md px-3 py-2 outline-none resize-none font-mono text-xs"
             rows="3"
           />
@@ -80,9 +96,7 @@ export default function TestCases({
       )}
 
       {current?.explanation && (
-        <div className="mt-2 text-xs text-gray-300">
-          {current.explanation}
-        </div>
+        <div className="mt-2 text-xs text-gray-300">{current.explanation}</div>
       )}
     </div>
   );

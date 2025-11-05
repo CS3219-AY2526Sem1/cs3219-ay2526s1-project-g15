@@ -3,9 +3,7 @@ import Editor from "@monaco-editor/react";
 
 const LABELS = {
   javascript: "JavaScript",
-  typescript: "TypeScript",
   python: "Python",
-  java: "Java",
 };
 
 function langBadge(lang) {
@@ -18,12 +16,8 @@ function buildSignature(name, lang) {
   switch (lang) {
     case "python":
       return `def ${name}(...):`;
-    case "typescript":
-      return `function ${name}(...args: any[]): any {}`;
     case "javascript":
       return `function ${name}(...args) {}`;
-    case "java":
-      return `public static Object ${name}(/* params */) {}`;
     default:
       return name;
   }
@@ -34,7 +28,7 @@ export default function CodeEditor({
   onChange,
   language = "javascript",
   onLanguageChange,
-  languages = ["javascript", "typescript", "python", "java"],
+  languages = ["javascript", "python"],
   filename = "index.js",
   height = "520px",
   onRun,

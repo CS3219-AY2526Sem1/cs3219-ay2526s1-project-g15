@@ -139,21 +139,40 @@ export default function Room() {
   const uiTests = useMemo(() => {
   if (!question || !Array.isArray(question.test_cases)) return [];
   return question.test_cases.map((tc) => {
+    // normalize input
     let parsedInput = tc.input;
     if (typeof tc.input === "string") {
-      parsedInput = parseRelaxed(tc.input);
-      if (parsedInput === null) {
-        try { parsedInput = JSON.parse(tc.input); } catch { parsedInput = tc.input; }
+      // try relaxed first
+      const relaxed = parseRelaxed(tc.input);
+      if (relaxed !== null) {
+        parsedInput = relaxed;
+      } else {
+        // then strict JSON
+        try {
+          parsedInput = JSON.parse(tc.input);
+        } catch {
+          parsedInput = tc.input; // leave as string
+        }
       }
     }
-    const outputDisplay = Array.isArray(tc.output)
-      ? JSON.stringify(tc.output)          
-      : prettyPrintOutput(tc.output);    
+
+    // normalize output
+    let outputDisplay;
+    if (typeof tc.output === "string") {
+      outputDisplay = tc.output;
+    } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
+      outputDisplay = JSON.stringify(tc.output, null, 2);
+    } else {
+      outputDisplay = prettyPrintOutput(tc.output);
+    }
 
     return {
       inputDisplay: prettyPrintInput(parsedInput),
       outputDisplay,
       explanation: tc.explanation || "",
+      // keep original too, just in case
+      input: parsedInput,
+      output: tc.output,
     };
   });
 }, [question]);
