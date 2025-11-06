@@ -39,6 +39,7 @@ export default function Home() {
     sessionId,
     username,
     userId,
+    topicDifficultyMatrix,
   } = useMatchmaking();
 
   // connect WebSocket once preparing
@@ -73,6 +74,7 @@ export default function Home() {
                 completedTopics={completedTopics}
                 disableStart={disableStart}
                 startSearch={startSearch} 
+                topicDifficultyMatrix={topicDifficultyMatrix} 
               />
             )}
 
