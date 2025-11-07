@@ -48,9 +48,7 @@ export const questionService = {
   async getQuestions(params = {}) {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${API_BASE}?${queryString}` : API_BASE;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch questions');
-    const data = await response.json();
+    const data = await fetchJson(url, { headers: authHeaders() });
 
     // Handle paginated response format
     if (data.questions && Array.isArray(data.questions)) {
