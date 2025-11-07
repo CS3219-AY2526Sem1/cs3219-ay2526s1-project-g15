@@ -15,8 +15,10 @@ async def notify_session_ready(session_id):
         session_id,
         {
             "type": "session_state",
-            "status": "ready",
-            "session_id": session_id
+            "data": {
+                "status": "ready",
+                "session_id": session_id
+            }
         },
         exclude_user_id=None
     )
