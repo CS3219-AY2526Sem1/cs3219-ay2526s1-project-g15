@@ -18,6 +18,7 @@ import AddQuestion from "../features/admin/pages/AddQuestion";
 import EditQuestion from "../features/admin/pages/EditQuestion";
 import AdminQuestionView from "../features/admin/pages/AdminQuestionView";
 import AdminEditProfile from "../features/admin/pages/AdminEditProfile";
+import QuestionView from "../features/history/pages/QuestionView";
 
 export default function RoutesDef() {
   return (
@@ -37,6 +38,7 @@ export default function RoutesDef() {
         <Route path="/history" element={<History />} />
         <Route path="/session/active/:sessionId" element={<Room />} />
         <Route path="/profile/edit" element={<EditProfile />} />
+        <Route path="/history/:attemptId" element={<QuestionView/>}/>
         
         {/* Admin-only Routes  */}
         <Route element={<AdminRoute />}>
