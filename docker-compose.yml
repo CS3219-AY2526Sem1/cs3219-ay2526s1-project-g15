@@ -138,9 +138,12 @@ services:
     ports:
       - "8004:8004"
     depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - appnet
     command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
