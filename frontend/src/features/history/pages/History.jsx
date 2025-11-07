@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../../home/components/OngoingMeetingCard";
+import { listMyAttempts, myAttemptsSummary } from "../../../shared/api/attemptsApi";
+import { questionService } from "../../../shared/api/questionService";
 
 const CheckIcon = ({ className = "" }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
@@ -16,26 +19,69 @@ const DIFF_COLOR = {
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
-// TODO: change fake, hardcoded data to data that is in database
-const INITIAL = [
-  { id: 1, title: "Interview Question 1", topic: "Arrays",       difficulty: "Easy",      solved: true  },
-  { id: 2, title: "Interview Question 2", topic: "Strings",      difficulty: "Easy",      solved: false },
-  { id: 3, title: "Interview Question 3", topic: "Graphs",       difficulty: "Medium",    solved: false },
-  { id: 4, title: "Interview Question 4", topic: "Linked Lists", difficulty: "Easy",      solved: false },
-  { id: 5, title: "Interview Question 5", topic: "DP",           difficulty: "Difficult", solved: true  },
-  { id: 6, title: "Interview Question 6", topic: "Trees",        difficulty: "Difficult", solved: false },
-  { id: 7, title: "Interview Question 7", topic: "Greedy",       difficulty: "Medium",    solved: false },
-  { id: 8, title: "Interview Question 8", topic: "Math",         difficulty: "Medium",    solved: false },
-];
-
 export default function History() {
+  const navigate = useNavigate();
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [q, setQ] = useState("");
-  const [items] = useState(INITIAL);
+  const [items, setItems] = useState([]);
 
-  const solvedCount = items.filter((i) => i.solved).length;
-  // TODO: change to questions that are in database
-  const TOTAL_POOL = 4829;
+  const [solvedCount, setSolvedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [totalPool, setTotalPool] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+
+        // get attempts
+        const attempts = (await listMyAttempts({ limit: 200, offset: 0 }))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        // solved count
+        const summary = await myAttemptsSummary().catch(() => null);
+        setSolvedCount(summary?.solved ?? attempts.filter((a) => a.is_solved).length);
+
+        // fetch all distinct questions
+        const questionIds = [...new Set(attempts.map((a) => a.question_id))];
+        const questions = await Promise.all(
+          questionIds.map((id) => questionService.getQuestion(id).catch(() => null))
+        );
+
+        const questionMap = Object.fromEntries(questions.filter(Boolean).map((q) => [q.id, q]));
+
+        // build UI items
+        const ui = attempts.map((a, idx) => {
+          const q = questionMap[a.question_id];
+          return {
+            // row number for display
+            rowNumber: idx + 1,
+            // actual attempt id from backend
+            attemptId: a.id,
+            title: q?.title ?? `Question #${a.question_id}`,
+            topic: (q?.topics && q.topics[0]) || "-",
+            difficulty: q?.difficulty || "-",
+            solved: !!a.is_solved,
+          };
+        });
+        setItems(ui);
+      } catch (err) {
+        console.error("Failed to load attempts:", err);
+        setItems([]);
+        setSolvedCount(0);
+      } finally {
+        setLoading(false);
+      }
+
+      // total question count 
+      try {
+        const total = await questionService.getTotalCount?.();
+        if (typeof total === "number") setTotalPool(total);
+      } catch (e) {
+        console.warn("getTotalCount failed:", e);
+      }
+    })();
+  }, []);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -64,7 +110,13 @@ export default function History() {
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="relative w-full max-w-md">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/80">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <circle cx="11" cy="11" r="7" />
                       <path d="M21 21l-4.3-4.3" />
                     </svg>
@@ -80,7 +132,9 @@ export default function History() {
 
                 <div className="flex items-center gap-2 text-sm text-gray-700">
                   <CheckIcon className="h-6 w-6 text-[#4C8954]" />
-                  <span>{solvedCount}/{TOTAL_POOL} attempts solved</span>
+                  <span>
+                    {solvedCount}/{totalPool} attempts solved
+                  </span>
                 </div>
               </div>
 
@@ -88,16 +142,18 @@ export default function History() {
               <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
                 {filtered.map((item) => (
                   <div
-                    key={item.id}
+                    key={item.attemptId}
                     className="grid grid-cols-[56px_1fr_160px_110px_40px] items-center gap-2 px-4 py-3
                                border-b last:border-b-0"
                   >
                     {/* index */}
-                    <div className="tabular-nums text-gray-500">{pad2(item.id)}</div>
+                    <div className="tabular-nums text-gray-500">
+                      {pad2(item.rowNumber)}
+                    </div>
 
                     {/* title */}
                     <button
-                      onClick={() => alert(`Open "${item.title}" (mock)`)}
+                      onClick={() => navigate(`/history/${item.attemptId}`)}
                       className="text-left text-gray-900 hover:text-[#4A53A7] font-medium"
                     >
                       {item.title}
@@ -111,7 +167,11 @@ export default function History() {
                     </div>
 
                     {/* difficulty */}
-                    <div className={`text-sm ${DIFF_COLOR[item.difficulty] || "text-gray-600"}`}>
+                    <div
+                      className={`text-sm ${
+                        DIFF_COLOR[item.difficulty] || "text-gray-600"
+                      }`}
+                    >
                       {item.difficulty}
                     </div>
 
