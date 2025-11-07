@@ -24,7 +24,9 @@ from app.clients.question_client import QuestionClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
 import json
 import traceback
+
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter()
 qclient = QuestionClient()
@@ -231,7 +233,8 @@ async def cancel_match_request(
 async def confirm_match(
     confirmation: MatchConfirmRequest,
     user: dict = Depends(verify_token),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=True))
 ):
     """
     Confirm match and create collaboration session
@@ -288,9 +291,12 @@ async def confirm_match(
                 else match.difficulty
             )
             topic_val = match.topic
+            # Forward the user's token to the question service
+            token = credentials.credentials if credentials else None
             question = await qclient.pick_question(
                 difficulty=difficulty_val.lower(),
-                topics=[topic_val]
+                topics=[topic_val],
+                token=token
             )
 
             # Initialize collaboration session in Redis
