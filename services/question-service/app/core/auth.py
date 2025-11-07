@@ -4,7 +4,7 @@ from app.core.config import settings
 import requests
 from typing import Optional
 
-security = HTTPBearer(auto_error=False)  # Make auth optional for now
+security = HTTPBearer(auto_error=True)
 
 def verify_token_with_user_service(token: str) -> Optional[dict]:
     """
@@ -50,9 +50,11 @@ def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(s
     Returns minimal user info with is_admin status.
     """
     if not credentials:
-        print("[PLACEHOLDER] No auth credentials provided - returning anonymous user")
-        return get_current_user(is_admin=False)
-
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials were not provided",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     token = credentials.credentials
     user_data = verify_token_with_user_service(token)
     if not user_data:
