@@ -1,9 +1,14 @@
+from select import select
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from app.models.question import Question
 from typing import List, Optional
 from app.core.database import get_db
 from app.core.auth import verify_token, require_admin, get_question_filter_context
 from app.schemas.question import (
+    QuestionCountResponse,
     QuestionCreate,
     QuestionUpdate,
     QuestionResponse,
@@ -66,6 +71,13 @@ def get_all_topics(
         include_inactive=auth_context["is_admin"]
     )
     return topics
+
+@router.get("/count", response_model=QuestionCountResponse)
+def get_question_count(db: Session = Depends(get_db)):
+    """Get the total number of questions"""
+    res = db.execute(select(func.count()).select_from(Question))
+    total = int(res.scalar_one())
+    return QuestionCountResponse(total=total)
 
 
 @router.get("/{question_id}", response_model=QuestionResponse)

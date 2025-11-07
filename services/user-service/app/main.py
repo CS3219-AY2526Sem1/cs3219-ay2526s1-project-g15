@@ -7,6 +7,7 @@ from app.db.init_db import init_db
 from app.routers import auth as auth_router
 from app.routers import users as users_router
 from app.routers import home
+from app.routers import attempts
 
 app = FastAPI(title="PeerPrep User Service", version="1.0.0")
 
@@ -28,6 +29,7 @@ async def on_startup():
 app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(home.router)
+app.include_router(attempts.router)
 
 @app.get("/healthz")
 async def healthz():
