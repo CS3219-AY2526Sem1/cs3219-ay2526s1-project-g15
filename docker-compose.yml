@@ -9,9 +9,20 @@ services:
       - ./frontend/build:/usr/share/nginx/html:ro
       - ./gateway/empty.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - user-service
-      - question-service
-      - matching-service
+      user-service:
+        condition: service_started
+      question-service:
+        condition: service_started
+      matching-service:
+        condition: service_started
+      collaboration-service:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - appnet
 
