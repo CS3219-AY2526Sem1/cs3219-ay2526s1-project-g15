@@ -34,29 +34,13 @@ export async function myAttemptsSummary() {
     return data; // { total_attempts, solved, last_attempt_at }
 }
 
-// fake endpoint
-export async function getAttemptById(id) {
-  // TODO: replace with real fetch when backend is ready
-  return {
-    id,
-    question_id: 2,
-    language: "javascript",
-    submitted_code: `function twoSum(nums, target) {
-  const map = {};
-  for (let i = 0; i < nums.length; i++) {
-    const need = target - nums[i];
-    if (map[need] !== undefined) return [map[need], i];
-    map[nums[i]] = i;
-  }
-}`,
-    passed_tests: 2,
-    total_tests: 3,
-    testCaseResults: [
-      { id: 1, isCorrect: true, userOutput: "[0,1]" },
-      { id: 2, isCorrect: true, userOutput: "[1,2]" },
-      { id: 3, isCorrect: false, userOutput: "[]" },
-    ],
-    created_at: new Date().toISOString(),
-  };
-}
 
+export async function getAttemptById(questionId) {
+  try {
+    const { data } = await attemptsApi.get(`/${questionId}`);
+    return data; // AttemptRead
+  } catch (err) {
+    if (err.response?.status === 404) return null;
+    throw err;
+  }
+}
