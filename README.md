@@ -14,9 +14,23 @@ PeerPrep is a **collaborative coding interview preparation platform** built as a
 
 ---
 
+## Table of Contents
+1. [Architecture Overview](#architecture-overview)
+2. [Microservices Overview](#microservices-overview)
+3. [Tech Stack](#tech-stack)
+4. [Repository Structure](#repository-structure)
+5. [Development Set Up](#development-setup)
+6. [Environment Set Up](#environment-setup)
+7. [Services and Ports](#services-and-ports)
+8. [Key Features](#key-features)
+9. [Troubleshooting](#troubleshooting)
+10. [Contributors](#contributors)
+
+---
+
 ## Architecture Overview
 
-PeerPrep follows a **microservices architecture**, with each service containerized and orchestrated via **Docker Compose**.
+PeerPrep follows a **reverse-proxied microservices** layout. Nginx sits in front and routes `/api/v1/...` to the correct backend. Each service is containerized and orchestrated via **Docker Compose**.
 
 ```
                           ┌─────────────────────┐
@@ -24,7 +38,7 @@ PeerPrep follows a **microservices architecture**, with each service containeriz
                           │  served via Nginx   │
                           └──────────┬──────────┘
                                      │
-                             HTTP / API Gateway
+                        HTTP (REST) / Websocket (WS)
                                      │
    ┌────────────────────────┬────────┴────────┬────────────────────────┐
    │                        │                 │                        │
@@ -40,6 +54,98 @@ PeerPrep follows a **microservices architecture**, with each service containeriz
                    └─────────────────────┘
 ```
 
+## Production Environment
+**Cloud Run Deployment**: http://54.255.202.189:8080
+
+All backend services are deployed on Google Cloud Run and connected to Google Cloud SQL instances for persistent data storage.
+
+Current Production Deployment: 
+- Production URL: http://54.255.202.189:8080
+- Database: Google Cloud SQL (PostgreSQL)
+- Deployment Method: Google Cloud Run
+- Scaling: Automatic based on traffic
+
+---
+## Microservices Overview
+### User Service (`/api/v1/users`)
+Manages **authentication**, **authorization**, and **user profiles**.  
+Built with **FastAPI**, **SQLAlchemy (async)**, and **PostgreSQL**.
+
+**Key features:**
+- JWT-based access and refresh tokens
+- Password hashing + account safety fields
+- Alembic migrations
+- REST endpoints for register, login, profile, and health checks
+
+**Default port:** `8001`
+
+Docs: [http://localhost:8001/docs](http://localhost:8001/docs)
+
+---
+
+### Matching Service (`/api/v1/matching`)
+Pairs users in **real time** based on difficulty and topic preferences.  
+Built with **FastAPI**, **Redis**, and **PostgreSQL**.
+
+**Features:**
+- Redis-backed queue for fast matchmaking
+- WebSocket notifications for `match_found` and `match_ready`
+- Polling loop every 2 seconds to match compatible users
+- JWT authentication required for all endpoints
+
+**Default port:** `8002`
+
+---
+
+### Question Service (`/api/v1/questions`)
+Centralized question repository and management system.  
+Built with **Flask + SQLAlchemy** and **PostgreSQL**.
+
+**Features:**
+- CRUD operations for coding questions
+- Admin-only question creation and status toggling
+- Filtering by topic and difficulty
+- Hardcoded + LeetCode API seeding
+- Supports images, examples, and test cases
+
+**Default port:** `8003`
+
+Docs: [http://localhost:8003/docs](http://localhost:8003/docs)
+
+---
+
+### Collaboration Service
+Handles **real-time code and note synchronization** between matched peers.  
+Implements a WebSocket-based message relay layer.
+
+**Features:**
+- Code editor synchronization
+- Collaborative notes
+- Cursor position & language sharing
+- User presence notifications
+- Reconnection + session state restoration
+
+**Default port:** `8004`
+
+**WebSocket Endpoint:** ws://localhost:8003/api/v1/ws/session/{session_id}?user_id={user_id}&username={username}
+
+---
+
+### Frontend (`/frontend`)
+A modern **React 18** single-page application with **TailwindCSS**.
+
+**Features:**
+- User authentication (via User Service)
+- Real-time matching interface
+- Monaco-based collaborative editor
+- Session state & test cases display
+- Question browsing and admin management
+- Integrated API gateway routing via Nginx
+
+**Runs on:** `http://localhost:8080`  
+
+**Dockerfile:** Multi-stage build → Node build → Nginx static hosting
+
 ---
 
 ## Tech Stack
@@ -47,12 +153,12 @@ PeerPrep follows a **microservices architecture**, with each service containeriz
 | Layer | Technology |
 |-------|-------------|
 | **Frontend** | React 18+, Tailwind CSS, Shadcn/UI, Monaco Editor |
-| **API Gateway** | Nginx (Reverse Proxy, Routing) |
-| **Backend Services** | Python (FastAPI / Flask) and Node.js (Express) |
+| **API Gateway** | Nginx (Reverse Proxy, static serving) |
+| **Backend Services** | FastAPI, Flask, Python |
 | **Database** | PostgreSQL |
 | **Cache / Queue** | Redis |
 | **Containerization** | Docker & Docker Compose |
-| **Deployment** | Configured for local and cloud setups |
+| **Deployment** | Google Cloud|
 
 ---
 
@@ -60,80 +166,26 @@ PeerPrep follows a **microservices architecture**, with each service containeriz
 
 ```
 peerprep/
-├── frontend/               # React web app (UI, served via Nginx)
-│   └── README.md           # Frontend-specific documentation
+├── frontend/                    # React web app (UI, served via Nginx)
+│   └── README.md
 │
-├── services
-│   ├── user-service/           # Handles authentication & user management
-│   │   ├── app/                # Routes, models, controllers
-│   │   └── Dockerfile
-│   │
-│   ├── question-service/       # Manages coding questions & metadata
-│   │   ├── scripts/            # Database setup, seeding scripts
-│   │   └── Dockerfile
-│   │
-│   ├── matching-service/       # Handles real-time matching between users
-│   │   ├── src/                # Matching logic, queues, health routes
-│   │   └── Dockerfile
-│   │
-│   └── matching-service/       # Handles collaboration logic between users
-│       ├── src/                
-│       └── Dockerfile
-│ 
-├── gateway/                # API gateway and reverse proxy configuration
+├── services/
+│   ├── user-service/            # Auth, users, JWT
+│   ├── question-service/        # Coding questions
+│   ├── matching-service/        # Real-time matching
+│   └── collaboration-service/   # WebSocket collaboration
+│
+├── gateway/                     # Nginx reverse proxy config
 │   └── nginx.conf
 │
-├── docker-compose.yml      # Orchestration for all services
-├── README.md               # This file
-└── docs/                   # Optional diagrams, documentation, or assets
+├── docker-compose.yml           # Orchestration for all services
+├── docs/                        # Extra API docs, diagrams
+└── README.md                    # (this file)
 ```
 
 ---
 
-## Services and Ports
-
-| Service | Port (Internal) | Description |
-|----------|-----------------|--------------|
-| **Frontend** | 3000 / 80 | React app served through Nginx |
-| **User Service** | 8001 | Authentication, user CRUD |
-| **Question Service** | 8002 | Question management and admin features |
-| **Matching Service** | 8003 | Peer matching and pairing service |
-| **Database (Postgres)** | 5432 | Relational data store |
-| **Cache (Redis)** | 6379 | Queue and temporary session storage |
-| **Gateway (Nginx)** | 8080 | Unified entry point for all APIs |
-
----
-
-## Environment Setup
-
-Each service reads from its own `.env` file. For local development, copy the provided templates:
-
-```bash
-cp .env.example .env
-```
-
-Populate with your own credentials (DB URL, JWT secrets, etc.).
-
-### Example (base `.env`):
-
-```env
-ENV=dev
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=peerprep
-REDIS_URL=redis://redis:6379
-JWT_SECRET=your_secret_key_here
-```
-
-### Frontend `.env`:
-
-```env
-REACT_APP_API_BASE=/api/v1
-```
-
----
-
-## 🧱 Development Setup
+## Development Setup
 
 ### 1. Prerequisites
 
@@ -143,7 +195,7 @@ REACT_APP_API_BASE=/api/v1
 
 ### 2. Start All Services
 
-From the root directory:
+From the **root** directory:
 
 ```bash
 docker compose build
@@ -162,9 +214,51 @@ Check each service health:
 | Service | Endpoint | Expected Response |
 |---------|----------|-------------------|
 | **Gateway** | http://localhost:8080 | Frontend landing page |
-| **User Service** | http://localhost:8001/api/v1/users/healthz | `{ "status": "healthy" }` |
-| **Question Service** | http://localhost:8002/api/v1/questions/health | `{ "status": "healthy" }` |
-| **Matching Service** | http://localhost:8003/api/v1/matching/health | `{ "status": "healthy" }` |
+| **User Service** | http://localhost:8001/healthz | `{"ok": true}` |
+| **Matching Service** | http://localhost:8002/health | `return {"status": "healthy", "environment": settings.ENV, "service": "matching-service", "port": settings.PORT,}` |
+| **Question Service** | http://localhost:8003/health | `{"status": "healthy", "service": "question-service"}` |
+| **Collaboration Service** | http://localhost:8004/health | `{"status": "healthy"}` | 
+
+---
+
+## Environment Setup
+
+Each service reads from its own `.env` file. For local development, copy the provided templates:
+
+```bash
+cp .env.example .env
+```
+
+### Example (base `.env`):
+
+```env
+ENV=dev
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=peerprep
+REDIS_URL=redis://redis:6379
+JWT_SECRET=your_secret_key_here
+```
+
+### Frontend `.env`:
+
+```env
+REACT_APP_API_BASE_URL=/api/v1
+```
+
+---
+
+## Services and Ports
+
+| Service | Port (Internal) | Description |
+|----------|-----------------|--------------|
+| **Frontend (Nginx)** | 3000 / 8080 | React app served through Nginx |
+| **User Service** | 8001 | Authentication, users |
+| **Matching Service** | 8002 | Peer matching and pairing service |
+| **Question Service** | 8003 | Question management and admin features |
+| **Collaboration Service** | 8004 | Peer collaboration service |
+| **Database (Postgres)** | 5432 | Relational data store |
+| **Cache (Redis)** | 6379 | Queue and temporary session storage |
 
 ---
 
@@ -193,6 +287,11 @@ Check each service health:
 - Load balancing and request forwarding
 - CORS handling and security headers
 
+### Cloud Infrastructure
+- **Google Cloud SQL**: Managed PostgreSQL databases with automatic backups and high availability
+- **Cloud Run**: Containerized microservices with automatic scaling
+- **Managed Redis**: For caching and real-time queue management
+- **Production-ready**: Deployed at http://54.255.202.189:8080/
 ---
 
 ## Development Commands
@@ -224,11 +323,11 @@ Check each service health:
 
 ---
 
-## 👥 Contributors
+## Contributors
 
 | Name | Role |
 |------|------|
-| Poh Sher Yin, Deanna | Frontend Developer         |
+| Deanna Poh           | Frontend Developer         |
 | Adrian Aw            | Backend (User Service)     |
 | Hai Hui              | Backend (Question Service) |
 | Chia Jia Ye          | Matching Service           |
@@ -236,7 +335,7 @@ Check each service health:
 
 ---
 
-## 🗂️ Related Documentation
+## Related Documentation
 
 - **[frontend/README.md](frontend/README.md)** – React app documentation
 - **[question-service/README.md](services/question-service/README.md)** – Question management microservice
@@ -245,7 +344,7 @@ Check each service health:
 - **[collaboration-service/README.md](services/collaboration-service/README.md)** – Real-time collaboration microservice
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Production Deployment
 
@@ -261,13 +360,13 @@ For production deployment, consider:
 ### Quick Production Build
 
 ```bash
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml build
+docker compose -f docker-compose.yml up -d
 ```
 
 ---
 
-## 📞 Support
+## Support
 
 For issues, questions, or suggestions:
 - Open an issue on GitHub
