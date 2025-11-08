@@ -1,8 +1,9 @@
 import asyncio
 import uuid, time
+import httpx
 from typing import Union, Optional, Dict
 from jose import jwt, JWTError, ExpiredSignatureError
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, Request, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
@@ -12,10 +13,11 @@ from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
     MatchRequestStatusResponse,
-    MatchFoundResponse,
     MatchConfirmRequest,
     MatchConfirmedResponse,
-    MatchCancelledResponse
+    MatchCancelledResponse,
+    ActiveSessionResponse,
+    EndSessionRequest,
 )
 from app.services.matching_service import matching_service
 from app.models.match_request import MatchRequest, MatchStatus
@@ -454,3 +456,171 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         finally:
             if user_id:
                 manager.disconnect(user_id)
+
+# @router.get("/sessions/active", response_model=ActiveSessionResponse)
+# async def get_active_session_for_user(
+#     user: dict = Depends(verify_token),
+#     db: Session = Depends(get_db),
+#     redis_client = Depends(get_redis_client),
+# ):
+#     """
+#     Finds the latest confirmed match for this user and returns the redis session if it still exists.
+#     """
+#     user_id = user["user_id"]
+
+#     # find a match that involves this user
+#     match = (
+#         db.query(Match)
+#         .filter((Match.user1_id == user_id) | (Match.user2_id == user_id))
+#         .order_by(Match.created_at.desc())
+#         .first()
+#     )
+
+#     if not match:
+#         raise HTTPException(status_code=404, detail="No active session")
+
+#     # must be fully confirmed
+#     if not (match.user1_confirmed and match.user2_confirmed):
+#         raise HTTPException(status_code=404, detail="No active session")
+
+#     session_id = (
+#         getattr(match, "session_id", None)
+#         or getattr(match, "collaboration_session_id", None)
+#     )
+#     if not session_id:
+#         raise HTTPException(status_code=404, detail="No active session")
+
+#     # check redis to make sure session is still alive
+#     session_data = await redis_client.get(session_id)
+#     if not session_data:
+#         raise HTTPException(status_code=404, detail="No active session")
+
+#     session_json = json.loads(session_data)
+
+#     partner_id = match.user2_id if match.user1_id == user_id else match.user1_id
+
+#     return ActiveSessionResponse(
+#         match_id=match.id,
+#         session_id=session_id,
+#         partner_id=partner_id,
+#         question=session_json.get("question", {}),
+#     )
+
+@router.get("/sessions/active", response_model=ActiveSessionResponse)
+async def get_active_session_for_user(
+    user: dict = Depends(verify_token),
+    db: Session = Depends(get_db),
+    redis_client = Depends(get_redis_client),
+):
+    """
+    Return active collab session for this user.
+    1. Try DB (normal flow)
+    2. If DB has nothing (e.g. service restarted), fall back to Redis scan
+    """
+    user_id = user["user_id"]
+
+    # --- 1) try DB, like before ---
+    query = db.query(Match).filter(
+        (Match.user1_id == user_id) | (Match.user2_id == user_id)
+    )
+    match = query.first()
+
+    if match:
+        # must be fully confirmed
+        if not (match.user1_confirmed and match.user2_confirmed):
+            raise HTTPException(status_code=404, detail="No active session")
+
+        session_id = (
+            getattr(match, "session_id", None)
+            or getattr(match, "collaboration_session_id", None)
+        )
+        if session_id:
+            data = await redis_client.get(session_id)
+            if data:
+                session_json = json.loads(data)
+                partner_id = match.user2_id if match.user1_id == user_id else match.user1_id
+                return ActiveSessionResponse(
+                    match_id=match.id,
+                    session_id=session_id,
+                    partner_id=partner_id,
+                    question=session_json.get("question", {}),
+                )
+
+    # --- 2) fallback: scan redis for any session that has this user ---
+    # WARNING: this is a simple scan; okay for dev
+    cursor = b"0"
+    found_session: Optional[dict] = None
+    found_session_id: Optional[str] = None
+
+    while True:
+        cursor, keys = await redis_client.scan(cursor=cursor, match="*")
+        for key in keys:
+            raw = await redis_client.get(key)
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            users = obj.get("users") or []
+            # users in your redis payload are like ["user1", "user2"]
+            if user_id in users:
+                found_session = obj
+                found_session_id = key.decode() if isinstance(key, bytes) else key
+                break
+
+        if found_session or cursor == b"0":
+            break
+
+    if not found_session:
+        raise HTTPException(status_code=404, detail="No active session")
+
+    # we don't have the Match row anymore, so we can't know partner_id 100%
+    other_users = [u for u in found_session.get("users", []) if u != user_id]
+    partner_id = other_users[0] if other_users else ""
+
+    return ActiveSessionResponse(
+        match_id="",
+        session_id=found_session_id,
+        partner_id=partner_id,
+        question=found_session.get("question", {}),
+    )
+
+@router.post("/sessions/end")
+async def end_session(
+    body: EndSessionRequest,
+    user: dict = Depends(verify_token),
+    db: Session = Depends(get_db),
+    redis_client = Depends(get_redis_client),
+):
+    """
+    Delete the redis collab payload so nobody can rejoin.
+    Notify both users over websocket.
+    """
+    session_id = body.session_id
+
+    # delete collab state from redis
+    await redis_client.delete(session_id)
+
+    # try to find the match that used this session id
+    match = (
+        db.query(Match)
+        .filter(Match.collaboration_session_id == session_id)
+        .first()
+    )
+
+    if match:
+        db.commit()
+
+        try:
+          async with httpx.AsyncClient() as client:
+              await client.post(
+                f"http://collaboration-service:8004/api/v1/sessions/{session_id}/notify-ended",
+                json={"ended_by": user["user_id"]},
+              )
+              print(f"Notified collab-service for session {session_id}")
+        except Exception as e:
+          print(f"Failed to notify collab-service: {e}")
+
+    return {"status": "ended"}

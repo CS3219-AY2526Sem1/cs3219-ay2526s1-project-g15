@@ -102,6 +102,25 @@ export async function getSessionDetails(sessionId, token) {
 }
 
 /**
+ * End a collaboration session
+ * @param {string} sessionId
+ * @param {string} token
+ */
+export async function endSession(sessionId, token) {
+  const res = await fetch(`${BASE_URL}/sessions/end`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
  * Open WebSocket connection for real-time updates
  * @param {string} token - JWT access token
  * @param {(msg: any) => void} onMessage - callback for messages
@@ -126,4 +145,3 @@ export function connectMatchingWebSocket(token, onMessage) {
 
   return ws;
 }
-

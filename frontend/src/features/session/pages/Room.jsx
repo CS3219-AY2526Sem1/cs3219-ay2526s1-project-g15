@@ -8,7 +8,7 @@ import useCodeExecution from "../hooks/useCodeExecution";
 import useSubmission from "../hooks/useSubmission";
 
 // apis
-import { getSessionDetails } from "../../../shared/api/matchingService";
+import { getSessionDetails, endSession } from "../../../shared/api/matchingService";
 import { questionService } from "../../../shared/api/questionService";
 
 // components
@@ -23,7 +23,7 @@ import {
 } from "../components/right_panel";
 
 import { getFunctionName } from "../../../shared/utils/HarnessBuilders";
-import { prettyPrintInput, prettyPrintOutput, parseRelaxed  } from "../../../shared/utils/ioFormat";
+import { prettyPrintInput, prettyPrintOutput, parseRelaxed } from "../../../shared/utils/ioFormat";
 import { filenameByLang } from "../constants";
 
 // some outputs have "" but others don't --> need helpers to compare outputs
@@ -85,6 +85,12 @@ export default function Room() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
 
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem("active_session_id", sessionId);
+    }
+  }, [sessionId]);
+
   const {
     user,
     userId,
@@ -110,12 +116,23 @@ export default function Room() {
     language,
     setLanguage,
     socketReady,
+    sessionEnded,
   } = useCollaborativeSession(sessionId, userId, username);
 
   const expectedFnName = useMemo(() => {
     if (!question || !question.title) return "";
     return getFunctionName(question.title);
   }, [question]);
+
+  useEffect(() => {
+    if (sessionEnded) {
+      alert("The other user ended the session. You'll be redirected.");
+      localStorage.removeItem("active_session_id");
+      setTimeout(() => {
+        navigate("/home");
+      }, 0);
+    }
+  }, [sessionEnded, navigate]);
 
   // 1) fetch question for this session so runner can use backend test_cases
   useEffect(() => {
@@ -149,7 +166,6 @@ export default function Room() {
     fetchQuestionForSession();
   }, [sessionId]);
 
-
   const runnerQuestion = useMemo(() => {
     if (question) {
       return {
@@ -177,178 +193,193 @@ export default function Room() {
   );
 
   const handleSubmit = async () => {
-  if (!code.trim()) {
-    alert("Please enter some code!");
-    return;
-  }
-
-  //latest run results
-  try {
-    const maybe = runCode(code, language);
-    if (maybe && typeof maybe.then === "function") {
-      await maybe;
+    if (!code.trim()) {
+      alert("Please enter some code!");
+      return;
     }
-  } catch (e) {
-    console.warn("runCode before submit failed", e);
-  }
 
-  // compare against backend test cases
-  let passed = 0;
-  let total = 0;
-  const details = [];
+    //latest run results
+    try {
+      const maybe = runCode(code, language);
+      if (maybe && typeof maybe.then === "function") {
+        await maybe;
+      }
+    } catch (e) {
+      console.warn("runCode before submit failed", e);
+    }
 
-  if (question && Array.isArray(question.test_cases)) {
-    total = question.test_cases.length;
+    // compare against backend test cases
+    let passed = 0;
+    let total = 0;
+    const details = [];
 
-    question.test_cases.forEach((tc, idx) => {
-      // runner may index 0 or 1, so try both
-      const runnerRes = caseOutputs[idx + 1] ?? caseOutputs[idx];
+    if (question && Array.isArray(question.test_cases)) {
+      total = question.test_cases.length;
 
-      // normalise user output coming from runner
-      const userOut =
-        runnerRes && typeof runnerRes === "object"
-          ? (runnerRes.output ??
-             runnerRes.actual ??
-             runnerRes.result ??
-             runnerRes)
-          : runnerRes;
+      question.test_cases.forEach((tc, idx) => {
+        // runner may index 0 or 1, so try both
+        const runnerRes = caseOutputs[idx + 1] ?? caseOutputs[idx];
 
-      // expected can be "output" or "outputDisplay"
-      const expected = tc.output ?? tc.outputDisplay;
+        // normalise user output coming from runner
+        const userOut =
+          runnerRes && typeof runnerRes === "object"
+            ? (runnerRes.output ??
+              runnerRes.actual ??
+              runnerRes.result ??
+              runnerRes)
+            : runnerRes;
 
-      const isCorrect =
-        userOut !== undefined && outputsMatch(expected, userOut);
+        // expected can be "output" or "outputDisplay"
+        const expected = tc.output ?? tc.outputDisplay;
 
-      if (isCorrect) passed += 1;
+        const isCorrect =
+          userOut !== undefined && outputsMatch(expected, userOut);
 
-      details.push({
-        id: idx + 1,
-        input: tc.input,
-        expected,
-        userOut,
-        isCorrect,
+        if (isCorrect) passed += 1;
+
+        details.push({
+          id: idx + 1,
+          input: tc.input,
+          expected,
+          userOut,
+          isCorrect,
+        });
       });
+    }
+
+    // update UI 
+    setSubmitSummary({
+      passed,
+      total,
+      details,
     });
-  }
+    setLastSubmittedCode(code);
+    setShowSubmitSummary(true);
 
-  // update UI 
-  setSubmitSummary({
-    passed,
-    total,
-    details,
-  });
-  setLastSubmittedCode(code);
-  setShowSubmitSummary(true);
+    // payload for backend
+    const payload = {
+      sessionId,                 // from useParams()
+      questionId: question?.id,  // from questionService
+      userId,
+      username,
+      language,                  // current lang in editor
+      code,                      // full code the user submitted
+      expectedFnName,            // function name
+      passedTestCases: passed,
+      totalTestCases: total,
+      testCaseResults: details.map(d => ({
+        id: d.id,
+        input: d.input,
+        expected: d.expected,
+        userOutput: d.userOut,
+        isCorrect: d.isCorrect,
+      })),
+    };
 
-  // payload for backend
-  const payload = {
-    sessionId,                 // from useParams()
-    questionId: question?.id,  // from questionService
-    userId,                  
-    username,                 
-    language,                  // current lang in editor
-    code,                      // full code the user submitted
-    expectedFnName,            // function name
-    passedTestCases: passed,
-    totalTestCases: total,
-    testCaseResults: details.map(d => ({
-      id: d.id,
-      input: d.input,
-      expected: d.expected,
-      userOutput: d.userOut,
-      isCorrect: d.isCorrect,
-    })),
+    // TODO: send to backend via hook
+    try {
+      await submitSolution(payload);
+    } catch (err) {
+      console.warn("submitSolution failed:", err);
+    }
   };
-
-  // TODO: send to backend via hook
-  try {
-    await submitSolution(payload);
-  } catch (err) {
-    console.warn("submitSolution failed:", err);
-  }
-};
-
 
   const handleEndSession = () => {
     setShowLeaveConfirm(true);
+  };
+
+  const handleEndSessionConfirm = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      await endSession(sessionId, token)
+    } catch (err) {
+      console.error("Failed to end session:", err);
+      // even if it fails, we still navigate away
+    }
+
+    // clear client-side rememberance
+    localStorage.removeItem("active_session_id");
+
+    // go back home
+    navigate("/home");
   };
 
   /**
    * UI-friendly tests
    */
   const uiTests = useMemo(() => {
-  if (!question || !Array.isArray(question.test_cases)) return [];
-  return question.test_cases.map((tc) => {
-    // normalise input
-    let parsedInput = tc.input;
-    if (typeof tc.input === "string") {
-      // try relaxed first
-      const relaxed = parseRelaxed(tc.input);
-      if (relaxed !== null) {
-        parsedInput = relaxed;
-      } else {
-        // then strict JSON
-        try {
-          parsedInput = JSON.parse(tc.input);
-        } catch {
-          parsedInput = tc.input; // leave as string
+    if (!question || !Array.isArray(question.test_cases)) return [];
+    return question.test_cases.map((tc) => {
+      // normalise input
+      let parsedInput = tc.input;
+      if (typeof tc.input === "string") {
+        // try relaxed first
+        const relaxed = parseRelaxed(tc.input);
+        if (relaxed !== null) {
+          parsedInput = relaxed;
+        } else {
+          // then strict JSON
+          try {
+            parsedInput = JSON.parse(tc.input);
+          } catch {
+            parsedInput = tc.input; // leave as string
+          }
         }
       }
-    }
 
-    // normalize output
-    let outputDisplay;
-    if (typeof tc.output === "string") {
-      outputDisplay = tc.output;
-    } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
-      outputDisplay = JSON.stringify(tc.output, null, 2);
-    } else {
-      outputDisplay = prettyPrintOutput(tc.output);
-    }
+      // normalize output
+      let outputDisplay;
+      if (typeof tc.output === "string") {
+        outputDisplay = tc.output;
+      } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
+        outputDisplay = JSON.stringify(tc.output, null, 2);
+      } else {
+        outputDisplay = prettyPrintOutput(tc.output);
+      }
 
-    return {
-      inputDisplay: prettyPrintInput(parsedInput),
-      outputDisplay,
-      explanation: tc.explanation || "",
-      // keep original just in case
-      input: parsedInput,
-      output: tc.output,
-    };
-  });
-}, [question]);
+      return {
+        inputDisplay: prettyPrintInput(parsedInput),
+        outputDisplay,
+        explanation: tc.explanation || "",
+        // keep original just in case
+        input: parsedInput,
+        output: tc.output,
+      };
+    });
+  }, [question]);
 
-const testsWithVerdict = useMemo(() => {
-  // uiTests is in the same order as backend test_cases
-  return uiTests.map((tc, idx) => {
-    const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
+  const testsWithVerdict = useMemo(() => {
+    // uiTests is in the same order as backend test_cases
+    return uiTests.map((tc, idx) => {
+      const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
 
-    const userOut =
-      actualFromRunner && typeof actualFromRunner === "object"
-        ? 
+      const userOut =
+        actualFromRunner && typeof actualFromRunner === "object"
+          ?
           (actualFromRunner.output ?? actualFromRunner.actual ?? actualFromRunner.result ?? actualFromRunner)
-        : actualFromRunner;
+          : actualFromRunner;
 
-    // compare with original tc.output (not display), fall back to display
-    const expectedForCompare =
-      tc.output !== undefined ? tc.output : tc.outputDisplay;
+      // compare with original tc.output (not display), fall back to display
+      const expectedForCompare =
+        tc.output !== undefined ? tc.output : tc.outputDisplay;
 
-    const isCorrect =
-      userOut !== undefined
-        ? outputsMatch(expectedForCompare, userOut)
-        : false;
+      const isCorrect =
+        userOut !== undefined
+          ? outputsMatch(expectedForCompare, userOut)
+          : false;
 
-    return {
-      ...tc,
-      status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
-      userOutput:
-        userOut === undefined
-          ? ""
-          : typeof userOut === "string"
-          ? userOut
-          : JSON.stringify(userOut, null, 2),
-    };
-  });
-}, [uiTests, caseOutputs]);
+      return {
+        ...tc,
+        status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
+        userOutput:
+          userOut === undefined
+            ? ""
+            : typeof userOut === "string"
+              ? userOut
+              : JSON.stringify(userOut, null, 2),
+      };
+    });
+  }, [uiTests, caseOutputs]);
 
 
   return (
@@ -378,7 +409,8 @@ const testsWithVerdict = useMemo(() => {
               {showLeaveConfirm && (
                 <EndSessionModal
                   setShowLeaveConfirm={setShowLeaveConfirm}
-                  navigate={navigate}
+                  onConfirm={handleEndSessionConfirm}
+                  onCancel={() => setShowLeaveConfirm(false)}
                 />
               )}
 
@@ -403,98 +435,97 @@ const testsWithVerdict = useMemo(() => {
               />
 
               {showSubmitSummary && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-1">
-                    Submission Summary
-                  </h2>
-                  <p className="text-sm text-gray-700 mb-4">
-                    You passed{" "}
-                    <span className="font-bold text-green-600">
-                      {submitSummary.passed}
-                    </span>{" "}
-                    out of{" "}
-                    <span className="font-semibold">{submitSummary.total}</span>{" "}
-                    test cases.
-                  </p>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                  <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-1">
+                      Submission Summary
+                    </h2>
+                    <p className="text-sm text-gray-700 mb-4">
+                      You passed{" "}
+                      <span className="font-bold text-green-600">
+                        {submitSummary.passed}
+                      </span>{" "}
+                      out of{" "}
+                      <span className="font-semibold">{submitSummary.total}</span>{" "}
+                      test cases.
+                    </p>
 
-                  {/* Summary table */}
-                  <div className="max-h-48 overflow-y-auto mb-4 border border-gray-200 rounded-md">
-                    <table className="w-full text-sm text-left font-mono">
-                      <thead className="bg-gray-100 text-gray-700">
-                        <tr>
-                          <th className="px-3 py-1">#</th>
-                          <th className="px-3 py-1">Result</th>
-                          <th className="px-3 py-1">Input</th>
-                          <th className="px-3 py-1">Expected</th>
-                          <th className="px-3 py-1">Your Output</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {submitSummary.details.map((tc) => (
-                          <tr
-                            key={tc.id}
-                            className={`${
-                              tc.isCorrect ? "bg-green-50" : "bg-red-50"
-                            } border-b border-gray-200`}
-                          >
-                            <td className="px-3 py-1">{tc.id}</td>
-                            <td className="px-3 py-1 font-semibold">
-                              {tc.isCorrect ? (
-                                <span className="text-green-600">✓ Passed</span>
-                              ) : (
-                                <span className="text-red-600">✗ Failed</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-1 truncate max-w-[120px]">
-                              {String(tc.input)}
-                            </td>
-                            <td className="px-3 py-1 truncate max-w-[120px]">
-                              {String(tc.expected)}
-                            </td>
-                            <td className="px-3 py-1 truncate max-w-[120px]">
-                              {String(tc.userOut)}
-                            </td>
+                    {/* Summary table */}
+                    <div className="max-h-48 overflow-y-auto mb-4 border border-gray-200 rounded-md">
+                      <table className="w-full text-sm text-left font-mono">
+                        <thead className="bg-gray-100 text-gray-700">
+                          <tr>
+                            <th className="px-3 py-1">#</th>
+                            <th className="px-3 py-1">Result</th>
+                            <th className="px-3 py-1">Input</th>
+                            <th className="px-3 py-1">Expected</th>
+                            <th className="px-3 py-1">Your Output</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Show user's full submitted code */}
-                  <div className="mb-4">
-                    <div className="text-sm font-medium text-gray-800 mb-1">
-                      Your Submitted Solution
+                        </thead>
+                        <tbody>
+                          {submitSummary.details.map((tc) => (
+                            <tr
+                              key={tc.id}
+                              className={`${tc.isCorrect ? "bg-green-50" : "bg-red-50"
+                                } border-b border-gray-200`}
+                            >
+                              <td className="px-3 py-1">{tc.id}</td>
+                              <td className="px-3 py-1 font-semibold">
+                                {tc.isCorrect ? (
+                                  <span className="text-green-600">✓ Passed</span>
+                                ) : (
+                                  <span className="text-red-600">✗ Failed</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-1 truncate max-w-[120px]">
+                                {String(tc.input)}
+                              </td>
+                              <td className="px-3 py-1 truncate max-w-[120px]">
+                                {String(tc.expected)}
+                              </td>
+                              <td className="px-3 py-1 truncate max-w-[120px]">
+                                {String(tc.userOut)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    <textarea
-                      readOnly
-                      value={lastSubmittedCode}
-                      className="w-full h-40 bg-gray-100 rounded-md p-2 font-mono text-xs text-gray-900"
-                    />
-                  </div>
 
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowSubmitSummary(false)}
-                      className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300 text-gray-800"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSubmitSummary(false);
-                        setShowLeaveConfirm(true);
-                      }}
-                      className="px-4 py-2 rounded-md text-sm bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      Leave Session
-                    </button>
+                    {/* Show user's full submitted code */}
+                    <div className="mb-4">
+                      <div className="text-sm font-medium text-gray-800 mb-1">
+                        Your Submitted Solution
+                      </div>
+                      <textarea
+                        readOnly
+                        value={lastSubmittedCode}
+                        className="w-full h-40 bg-gray-100 rounded-md p-2 font-mono text-xs text-gray-900"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowSubmitSummary(false)}
+                        className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300 text-gray-800"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSubmitSummary(false);
+                          setShowLeaveConfirm(true);
+                        }}
+                        className="px-4 py-2 rounded-md text-sm bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Leave Session
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
             </section>
           </div>
         </div>
