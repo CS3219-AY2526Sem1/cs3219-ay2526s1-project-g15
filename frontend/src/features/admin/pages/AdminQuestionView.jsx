@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AdminTopNav from "../components/AdminTopNav";
-import { CodeEditor } from "../../session/components/right_panel";
+import { CodeEditor } from "../../session/components/code_panel";
 import { questionService } from "../../../shared/api/questionService";
 import { formatScalarDisplay } from "../../../shared/utils/ioFormat";
 

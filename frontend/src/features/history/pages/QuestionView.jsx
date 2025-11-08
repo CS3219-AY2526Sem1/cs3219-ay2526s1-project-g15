@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
-import { CodeEditor } from "../../session/components/right_panel";
+import { CodeEditor } from "../../session/components/code_panel";
 import { questionService } from "../../../shared/api/questionService";
 import {
   parseRelaxed,
