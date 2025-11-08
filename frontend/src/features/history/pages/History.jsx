@@ -143,7 +143,7 @@ export default function History() {
                 {filtered.map((item) => (
                   <div
                     key={item.attemptId}
-                    className="grid grid-cols-[56px_1fr_160px_110px_40px] items-center gap-2 px-4 py-3
+                    className="grid grid-cols-[56px_1fr_160px_110px_40px_minmax(84px,auto)] items-center gap-2 px-4 py-3
                                border-b last:border-b-0"
                   >
                     {/* index */}
@@ -179,6 +179,20 @@ export default function History() {
                     <div className="mx-auto text-[#4C8954]">
                       {item.solved && <CheckIcon className="h-5 w-5" />}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/history/${item.attemptId}`);
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border px-3 py-1 text-sm font-medium
+                                border-gray-300 bg-white text-gray-700 hover:bg-gray-50
+                                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      aria-label={`View details for ${item.title}`}
+                    >
+                      View
+                  </button>
                   </div>
                 ))}
               </div>
