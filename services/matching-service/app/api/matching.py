@@ -457,55 +457,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             if user_id:
                 manager.disconnect(user_id)
 
-# @router.get("/sessions/active", response_model=ActiveSessionResponse)
-# async def get_active_session_for_user(
-#     user: dict = Depends(verify_token),
-#     db: Session = Depends(get_db),
-#     redis_client = Depends(get_redis_client),
-# ):
-#     """
-#     Finds the latest confirmed match for this user and returns the redis session if it still exists.
-#     """
-#     user_id = user["user_id"]
-
-#     # find a match that involves this user
-#     match = (
-#         db.query(Match)
-#         .filter((Match.user1_id == user_id) | (Match.user2_id == user_id))
-#         .order_by(Match.created_at.desc())
-#         .first()
-#     )
-
-#     if not match:
-#         raise HTTPException(status_code=404, detail="No active session")
-
-#     # must be fully confirmed
-#     if not (match.user1_confirmed and match.user2_confirmed):
-#         raise HTTPException(status_code=404, detail="No active session")
-
-#     session_id = (
-#         getattr(match, "session_id", None)
-#         or getattr(match, "collaboration_session_id", None)
-#     )
-#     if not session_id:
-#         raise HTTPException(status_code=404, detail="No active session")
-
-#     # check redis to make sure session is still alive
-#     session_data = await redis_client.get(session_id)
-#     if not session_data:
-#         raise HTTPException(status_code=404, detail="No active session")
-
-#     session_json = json.loads(session_data)
-
-#     partner_id = match.user2_id if match.user1_id == user_id else match.user1_id
-
-#     return ActiveSessionResponse(
-#         match_id=match.id,
-#         session_id=session_id,
-#         partner_id=partner_id,
-#         question=session_json.get("question", {}),
-#     )
-
 @router.get("/sessions/active", response_model=ActiveSessionResponse)
 async def get_active_session_for_user(
     user: dict = Depends(verify_token),
@@ -519,7 +470,7 @@ async def get_active_session_for_user(
     """
     user_id = user["user_id"]
 
-    # --- 1) try DB, like before ---
+    # 1) try DB
     query = db.query(Match).filter(
         (Match.user1_id == user_id) | (Match.user2_id == user_id)
     )
@@ -546,8 +497,7 @@ async def get_active_session_for_user(
                     question=session_json.get("question", {}),
                 )
 
-    # --- 2) fallback: scan redis for any session that has this user ---
-    # WARNING: this is a simple scan; okay for dev
+    # 2) fallback: scan redis for any session that has this user
     cursor = b"0"
     found_session: Optional[dict] = None
     found_session_id: Optional[str] = None
@@ -576,7 +526,6 @@ async def get_active_session_for_user(
     if not found_session:
         raise HTTPException(status_code=404, detail="No active session")
 
-    # we don't have the Match row anymore, so we can't know partner_id 100%
     other_users = [u for u in found_session.get("users", []) if u != user_id]
     partner_id = other_users[0] if other_users else ""
 

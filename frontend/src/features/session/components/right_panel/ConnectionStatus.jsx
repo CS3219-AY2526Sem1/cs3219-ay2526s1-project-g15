@@ -1,6 +1,6 @@
 export default function RoomHeader({ socketReady, username, onLeave }) {
   return (
-    <div className="relative mb-2">
+    <div className="flex flex-col items-start text-left mb-3 w-fit">
       {!socketReady ? (
         <p className="text-sm text-gray-500 mb-1">Connecting to collaboration service...</p>
       ) : (
