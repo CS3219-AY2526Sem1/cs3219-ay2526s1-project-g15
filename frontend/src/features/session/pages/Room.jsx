@@ -134,7 +134,7 @@ export default function Room() {
     }
   }, [sessionEnded, navigate]);
 
-  // 1) fetch question for this session so runner can use backend test_cases
+  // fetch question for this session so runner can use backend test_cases
   useEffect(() => {
     if (!sessionId) return;
 
@@ -198,7 +198,7 @@ export default function Room() {
       return;
     }
 
-    //latest run results
+    // run latest code first
     try {
       const maybe = runCode(code, language);
       if (maybe && typeof maybe.then === "function") {
@@ -207,8 +207,6 @@ export default function Room() {
     } catch (e) {
       console.warn("runCode before submit failed", e);
     }
-
-    // compare against backend test cases
     let passed = 0;
     let total = 0;
     const details = [];
@@ -217,10 +215,8 @@ export default function Room() {
       total = question.test_cases.length;
 
       question.test_cases.forEach((tc, idx) => {
-        // runner may index 0 or 1, so try both
         const runnerRes = caseOutputs[idx + 1] ?? caseOutputs[idx];
 
-        // normalise user output coming from runner
         const userOut =
           runnerRes && typeof runnerRes === "object"
             ? (runnerRes.output ??
@@ -229,7 +225,6 @@ export default function Room() {
               runnerRes)
             : runnerRes;
 
-        // expected can be "output" or "outputDisplay"
         const expected = tc.output ?? tc.outputDisplay;
 
         const isCorrect =
@@ -247,27 +242,18 @@ export default function Room() {
       });
     }
 
-    // update UI 
-    setSubmitSummary({
-      passed,
-      total,
-      details,
-    });
-    setLastSubmittedCode(code);
-    setShowSubmitSummary(true);
-
-    // payload for backend
+    // build payload for backend
     const payload = {
-      sessionId,                 // from useParams()
-      questionId: question?.id,  // from questionService
+      sessionId,
+      questionId: question?.id,
       userId,
       username,
-      language,                  // current lang in editor
-      code,                      // full code the user submitted
-      expectedFnName,            // function name
+      language,
+      code,
+      expectedFnName,
       passedTestCases: passed,
       totalTestCases: total,
-      testCaseResults: details.map(d => ({
+      testCaseResults: details.map((d) => ({
         id: d.id,
         input: d.input,
         expected: d.expected,
@@ -276,13 +262,24 @@ export default function Room() {
       })),
     };
 
-    // TODO: send to backend via hook
     try {
       await submitSolution(payload);
+
+      // only if backend succeeds, show the summary
+      setSubmitSummary({
+        passed,
+        total,
+        details,
+      });
+      setLastSubmittedCode(code);
+      setShowSubmitSummary(true);
     } catch (err) {
       console.warn("submitSolution failed:", err);
+      return;
     }
   };
+
+
 
   const handleEndSession = () => {
     setShowLeaveConfirm(true);

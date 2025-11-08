@@ -8,10 +8,10 @@ from sqlalchemy import select, delete
 from app.db.session import get_session
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
-from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn, VerifyCodeIn, PasswordVerifyIn
+from app.schemas.auth import RegisterIn, LoginIn, AuthOut, ForgotPasswordIn, ResetPasswordIn, VerifyCodeIn, PasswordVerifyIn, RefreshIn
 from app.schemas.user import UserOut
 from app.models.password_reset import PasswordReset
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, create_verification_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, create_verification_token, verify_refresh_token
 from app.core.config import settings
 from app.core.email import send_verification_email, send_reset_code_email
 from app.routers.users import get_current_user
@@ -237,3 +237,17 @@ async def verify_user_password(
         return {"ok": True}
     else:
         return {"ok": False}
+    
+@router.post("/refresh")
+def refresh(data: RefreshIn):
+    payload = verify_refresh_token(data.refresh_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    user_id = payload.get("sub")
+    email = payload.get("email")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    access = create_access_token(str(user_id), email)
+    return {"access_token": access, "token_type": "bearer"}

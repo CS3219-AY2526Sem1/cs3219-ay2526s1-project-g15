@@ -33,3 +33,14 @@ export async function myAttemptsSummary() {
     const { data } = await attemptsApi.get("/me/summary");
     return data; // { total_attempts, solved, last_attempt_at }
 }
+
+
+export async function getAttemptById(questionId) {
+  try {
+    const { data } = await attemptsApi.get(`/${questionId}`);
+    return data; // AttemptRead
+  } catch (err) {
+    if (err.response?.status === 404) return null;
+    throw err;
+  }
+}
