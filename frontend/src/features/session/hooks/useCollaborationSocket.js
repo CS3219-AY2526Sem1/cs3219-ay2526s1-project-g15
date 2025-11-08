@@ -8,6 +8,7 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     notes: "",
     users: []
   });
+  const [sessionEnded, setSessionEnded] = useState(false);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -65,6 +66,13 @@ export default function useCollaborationSocket(sessionId, userId, username) {
             users: prev.users.filter(u => u.user_id !== message.user_id)
             }));
             break;
+        case "session_ended":
+            if (message.ended_by && message.ended_by === userId) {
+              return;
+            }
+            window.alert("The other user ended the session.");
+            setSessionEnded(true);
+            break;
         default:
             console.warn("Unhandled message:", message);
         }
@@ -92,5 +100,5 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     }
   };
 
-  return { socketReady, sessionState, sendMessage };
+  return { socketReady, sessionState, sendMessage, sessionEnded };
 }

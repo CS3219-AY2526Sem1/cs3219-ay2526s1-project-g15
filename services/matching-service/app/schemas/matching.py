@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal, Optional
+from typing import Literal, Optional, Any
 from datetime import datetime
 from enum import Enum
 
@@ -48,3 +48,12 @@ class MatchCancelledResponse(BaseModel):
     status: Literal["cancelled"] = "cancelled"
     requeued_partner: bool = True
     match_id: str
+
+class ActiveSessionResponse(BaseModel):
+    match_id: str
+    session_id: str
+    partner_id: str
+    question: Any
+
+class EndSessionRequest(BaseModel):
+    session_id: str
