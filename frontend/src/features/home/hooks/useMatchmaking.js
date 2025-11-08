@@ -23,6 +23,7 @@ export default function useMatchmaking() {
   const [questionId, setQuestionId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [username, setUsername] = useState("Guest");
+  const [topicDifficultyMatrix, setTopicDifficultyMatrix] = useState({});
 
   const token = localStorage.getItem("accessToken");
 
@@ -34,9 +35,54 @@ export default function useMatchmaking() {
     });
   }, []);
 
-  // fetch topics
+  // Function to build the topic-difficulty matrix from questions
+  const buildTopicDifficultyMatrix = (questions) => {
+    const matrix = {};
+    
+    questions.forEach(q => {
+      q.topics.forEach(topic => {
+        if (!matrix[topic]) {
+          matrix[topic] = [];
+        }
+        // Capitalize difficulty to match UI format
+        const difficulty = q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1);
+        if (!matrix[topic].includes(difficulty)) {
+          matrix[topic].push(difficulty);
+        }
+      });
+    });
+    
+    // Sort difficulties in each topic (Easy, Medium, Hard)
+    const order = { Easy: 0, Medium: 1, Hard: 2 };
+    Object.keys(matrix).forEach(topic => {
+      matrix[topic].sort((a, b) => order[a] - order[b]);
+    });
+    
+    return matrix;
+  };
+
+  // fetch topics and build matrix
   useEffect(() => {
-    questionService.getTopics().then(setTopics).catch(console.error);
+    const fetchQuestionsAndTopics = async () => {
+      try {
+        // Fetch all questions to build the matrix
+        const questions = await questionService.getQuestions();
+        
+        // Extract unique topics
+        const allTopics = [...new Set(questions.flatMap(q => q.topics))].sort();
+        setTopics(allTopics);
+        
+        // Build the topic difficulty matrix
+        const matrix = buildTopicDifficultyMatrix(questions);
+        setTopicDifficultyMatrix(matrix);
+      } catch (error) {
+        console.error('Error fetching questions:', error);
+        // just fetch topics if questions fetch fails
+        questionService.getTopics().then(setTopics).catch(console.error);
+      }
+    };
+    
+    fetchQuestionsAndTopics();
   }, []);
 
   const completedTopics = COMPLETED_TOPICS;
@@ -129,6 +175,7 @@ export default function useMatchmaking() {
     difficulty,
     setDifficulty,
     topics,
+    topicDifficultyMatrix, 
     completedTopics,
     hasOngoingMeeting,
     setHasOngoingMeeting,

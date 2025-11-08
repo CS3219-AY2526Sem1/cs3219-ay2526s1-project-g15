@@ -24,10 +24,11 @@ frontend/
 │   ├── features/          # Feature-based modules
 │   │   ├── admin/         # Admin dashboard & question management
 │   │   ├── auth/          # Login, register, email verification
+│   │   ├── history/       # History of users' attempts
 │   │   ├── home/          # Home page 
 │   │   ├── profile/       # Edit Profile page 
 │   │   ├── session/       # Collaboration session/room 
-│   ├── shared/            # Reusable components and utilities     
+│   ├── shared/            # Reusable components, utilities and api  
 ├── index.css              # Global CSS + Tailwind imports
 ├── index.js               # React entry point
 ├── Dockerfile             # Container setup for Nginx serving build
@@ -105,6 +106,8 @@ This will:
 - Email verification
 - Password reset functionality
 - Role-based access control (User / Admin)
+- Account deletion
+- Automatic logout after 15 minutes of inactivity
 
 ### Matching & Collaboration
 - Real-time peer matching via matching service
@@ -114,7 +117,6 @@ This will:
 ### Question Management (Admin)
 - Add, edit, and delete coding questions
 - Manage question topics, difficulty levels, constraints, and examples
-- Full CRUD operations for interview questions
 
 ### Gateway Integration
 - All API routes automatically proxied through Nginx

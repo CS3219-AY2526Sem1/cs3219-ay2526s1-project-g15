@@ -19,6 +19,7 @@ import EditQuestion from "../features/admin/pages/EditQuestion";
 import AdminQuestionView from "../features/admin/pages/AdminQuestionView";
 import AdminEditProfile from "../features/admin/pages/AdminEditProfile";
 import AuthedLayout from "../shared/AuthedLayout";
+import QuestionView from "../features/history/pages/QuestionView";
 
 export default function RoutesDef() {
   return (
@@ -40,7 +41,8 @@ export default function RoutesDef() {
             <Route path="/history" element={<History />} />
             <Route path="/session/active/:sessionId" element={<Room />} />
             <Route path="/profile/edit" element={<EditProfile />} />
-
+            <Route path="/history/:attemptId" element={<QuestionView/>}/>
+            
             {/* Admin-only Routes  */}
             <Route element={<AdminRoute />}>
               <Route path="/admin/home" element={<AdminHome />} />
@@ -49,8 +51,6 @@ export default function RoutesDef() {
               <Route path="/admin/add-questions" element={<AddQuestion />} />
               <Route path="/admin/questions/:id/edit" element={<EditQuestion />} />
             </Route>
-
-            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Route>
       </Routes>

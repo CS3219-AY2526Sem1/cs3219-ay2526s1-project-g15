@@ -117,7 +117,7 @@ export default function Room() {
     return getFunctionName(question.title);
   }, [question]);
 
-  // 1) fetch question for this session so runner can use backend test_cases
+  // fetch question for this session so runner can use backend test_cases
   useEffect(() => {
     if (!sessionId) return;
 
@@ -177,96 +177,92 @@ export default function Room() {
   );
 
   const handleSubmit = async () => {
-  if (!code.trim()) {
-    alert("Please enter some code!");
-    return;
-  }
-
-  //latest run results
-  try {
-    const maybe = runCode(code, language);
-    if (maybe && typeof maybe.then === "function") {
-      await maybe;
+    if (!code.trim()) {
+      alert("Please enter some code!");
+      return;
     }
-  } catch (e) {
-    console.warn("runCode before submit failed", e);
-  }
 
-  // compare against backend test cases
-  let passed = 0;
-  let total = 0;
-  const details = [];
+    // run latest code first
+    try {
+      const maybe = runCode(code, language);
+      if (maybe && typeof maybe.then === "function") {
+        await maybe;
+      }
+    } catch (e) {
+      console.warn("runCode before submit failed", e);
+    }
+    let passed = 0;
+    let total = 0;
+    const details = [];
 
-  if (question && Array.isArray(question.test_cases)) {
-    total = question.test_cases.length;
+    if (question && Array.isArray(question.test_cases)) {
+      total = question.test_cases.length;
 
-    question.test_cases.forEach((tc, idx) => {
-      // runner may index 0 or 1, so try both
-      const runnerRes = caseOutputs[idx + 1] ?? caseOutputs[idx];
+      question.test_cases.forEach((tc, idx) => {
+        const runnerRes = caseOutputs[idx + 1] ?? caseOutputs[idx];
 
-      // normalise user output coming from runner
-      const userOut =
-        runnerRes && typeof runnerRes === "object"
-          ? (runnerRes.output ??
-             runnerRes.actual ??
-             runnerRes.result ??
-             runnerRes)
-          : runnerRes;
+        const userOut =
+          runnerRes && typeof runnerRes === "object"
+            ? (runnerRes.output ??
+              runnerRes.actual ??
+              runnerRes.result ??
+              runnerRes)
+            : runnerRes;
 
-      // expected can be "output" or "outputDisplay"
-      const expected = tc.output ?? tc.outputDisplay;
+        const expected = tc.output ?? tc.outputDisplay;
 
-      const isCorrect =
-        userOut !== undefined && outputsMatch(expected, userOut);
+        const isCorrect =
+          userOut !== undefined && outputsMatch(expected, userOut);
 
-      if (isCorrect) passed += 1;
+        if (isCorrect) passed += 1;
 
-      details.push({
-        id: idx + 1,
-        input: tc.input,
-        expected,
-        userOut,
-        isCorrect,
+        details.push({
+          id: idx + 1,
+          input: tc.input,
+          expected,
+          userOut,
+          isCorrect,
+        });
       });
-    });
-  }
+    }
 
-  // update UI 
-  setSubmitSummary({
-    passed,
-    total,
-    details,
-  });
-  setLastSubmittedCode(code);
-  setShowSubmitSummary(true);
+    // build payload for backend
+    const payload = {
+      sessionId,
+      questionId: question?.id,
+      userId,
+      username,
+      language,
+      code,
+      expectedFnName,
+      passedTestCases: passed,
+      totalTestCases: total,
+      testCaseResults: details.map((d) => ({
+        id: d.id,
+        input: d.input,
+        expected: d.expected,
+        userOutput: d.userOut,
+        isCorrect: d.isCorrect,
+      })),
+    };
 
-  // payload for backend
-  const payload = {
-    sessionId,                 // from useParams()
-    questionId: question?.id,  // from questionService
-    userId,                  
-    username,                 
-    language,                  // current lang in editor
-    code,                      // full code the user submitted
-    expectedFnName,            // function name
-    passedTestCases: passed,
-    totalTestCases: total,
-    testCaseResults: details.map(d => ({
-      id: d.id,
-      input: d.input,
-      expected: d.expected,
-      userOutput: d.userOut,
-      isCorrect: d.isCorrect,
-    })),
+    try {
+      await submitSolution(payload);
+
+      // only if backend succeeds, show the summary
+      setSubmitSummary({
+        passed,
+        total,
+        details,
+      });
+      setLastSubmittedCode(code);
+      setShowSubmitSummary(true);
+    } catch (err) {
+      console.warn("submitSolution failed:", err);
+      return;
+    }
   };
 
-  // TODO: send to backend via hook
-  try {
-    await submitSolution(payload);
-  } catch (err) {
-    console.warn("submitSolution failed:", err);
-  }
-};
 
 
   const handleEndSession = () => {

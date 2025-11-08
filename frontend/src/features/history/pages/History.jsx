@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TopNav from "../../../shared/components/TopNav";
 import OngoingMeetingCard from "../../home/components/OngoingMeetingCard";
 import { listMyAttempts, myAttemptsSummary } from "../../../shared/api/attemptsApi";
-import { questionService, countQuestions } from "../../../shared/api/questionService";
+import { questionService } from "../../../shared/api/questionService";
 
 const CheckIcon = ({ className = "" }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
@@ -19,6 +20,7 @@ const DIFF_COLOR = {
 const pad2 = (n) => String(n).padStart(2, "0");
 
 export default function History() {
+  const navigate = useNavigate();
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [q, setQ] = useState("");
   const [items, setItems] = useState([]);
@@ -32,25 +34,30 @@ export default function History() {
       try {
         setLoading(true);
 
+        // get attempts
         const attempts = (await listMyAttempts({ limit: 200, offset: 0 }))
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+        // solved count
         const summary = await myAttemptsSummary().catch(() => null);
-        setSolvedCount(summary?.solved ?? attempts.filter(a => a.is_solved).length);
+        setSolvedCount(summary?.solved ?? attempts.filter((a) => a.is_solved).length);
 
-        const questionIds = [...new Set(attempts.map(a => a.question_id))];
+        // fetch all distinct questions
+        const questionIds = [...new Set(attempts.map((a) => a.question_id))];
         const questions = await Promise.all(
-          questionIds.map(id => questionService.getQuestion(id).catch(() => null))
+          questionIds.map((id) => questionService.getQuestion(id).catch(() => null))
         );
 
-        const questionMap = Object.fromEntries(
-          questions.filter(Boolean).map(q => [q.id, q])
-        );
+        const questionMap = Object.fromEntries(questions.filter(Boolean).map((q) => [q.id, q]));
 
+        // build UI items
         const ui = attempts.map((a, idx) => {
           const q = questionMap[a.question_id];
           return {
-            id: idx + 1,
+            // row number for display
+            rowNumber: idx + 1,
+            // actual attempt id from backend
+            attemptId: a.id,
             title: q?.title ?? `Question #${a.question_id}`,
             topic: (q?.topics && q.topics[0]) || "-",
             difficulty: q?.difficulty || "-",
@@ -65,11 +72,13 @@ export default function History() {
       } finally {
         setLoading(false);
       }
+
+      // total question count 
       try {
-        const total = questionService.getTotalCount();
-        setTotalPool(total);
+        const total = await questionService.getTotalCount?.();
+        if (typeof total === "number") setTotalPool(total);
       } catch (e) {
-        console.warn("countQuestions failed:", e);
+        console.warn("getTotalCount failed:", e);
       }
     })();
   }, []);
@@ -101,8 +110,14 @@ export default function History() {
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="relative w-full max-w-md">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/80">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="11" cy="11" r="7" /> 
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="11" cy="11" r="7" />
                       <path d="M21 21l-4.3-4.3" />
                     </svg>
                   </span>
@@ -117,7 +132,9 @@ export default function History() {
 
                 <div className="flex items-center gap-2 text-sm text-gray-700">
                   <CheckIcon className="h-6 w-6 text-[#4C8954]" />
-                  <span>{solvedCount}/{totalPool} attempts solved</span>
+                  <span>
+                    {solvedCount}/{totalPool} attempts solved
+                  </span>
                 </div>
               </div>
 
@@ -125,16 +142,18 @@ export default function History() {
               <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
                 {filtered.map((item) => (
                   <div
-                    key={item.id}
+                    key={item.attemptId}
                     className="grid grid-cols-[56px_1fr_160px_110px_40px] items-center gap-2 px-4 py-3
                                border-b last:border-b-0"
                   >
                     {/* index */}
-                    <div className="tabular-nums text-gray-500">{pad2(item.id)}</div>
+                    <div className="tabular-nums text-gray-500">
+                      {pad2(item.rowNumber)}
+                    </div>
 
                     {/* title */}
                     <button
-                      onClick={() => alert(`Open "${item.title}" (mock)`)}
+                      onClick={() => navigate(`/history/${item.attemptId}`)}
                       className="text-left text-gray-900 hover:text-[#4A53A7] font-medium"
                     >
                       {item.title}
@@ -148,7 +167,11 @@ export default function History() {
                     </div>
 
                     {/* difficulty */}
-                    <div className={`text-sm ${DIFF_COLOR[item.difficulty] || "text-gray-600"}`}>
+                    <div
+                      className={`text-sm ${
+                        DIFF_COLOR[item.difficulty] || "text-gray-600"
+                      }`}
+                    >
                       {item.difficulty}
                     </div>
 
