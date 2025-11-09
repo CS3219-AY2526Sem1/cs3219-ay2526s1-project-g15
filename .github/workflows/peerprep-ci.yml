@@ -1,0 +1,82 @@
+name: PeerPrep CI
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  backend-services:
+    name: backend - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ "user-service", "question-service", "matching-service", "collaboration-service" ]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Python toolchain (only used if service is python)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Node toolchain (only used if service is node)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install & test (auto-detect)
+        run: |
+          echo "Running in services/${{ matrix.service }}"
+          if [ -f "requirements.txt" ]; then
+            echo "Python service detected"
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            # lint if you have it
+            if command -v ruff >/dev/null 2>&1; then
+              ruff .
+            fi
+            pytest
+          elif [ -f "package.json" ]; then
+            echo "Node service detected"
+            npm install
+            npm run lint --if-present
+            npm test -- --watch=false --runInBand
+          else
+            echo "No known build file (requirements.txt or package.json) found, skipping."
+            exit 0
+          fi
+
+  frontend:
+    name: frontend (react)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm install
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test -- --watch=false
