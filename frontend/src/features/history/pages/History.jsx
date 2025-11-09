@@ -21,7 +21,6 @@ const pad2 = (n) => String(n).padStart(2, "0");
 
 export default function History() {
   const navigate = useNavigate();
-  const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
   const [q, setQ] = useState("");
   const [items, setItems] = useState([]);
 
@@ -99,12 +98,6 @@ export default function History() {
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-4 py-6">
           <div className="flex gap-6">
-            {hasOngoingMeeting && (
-              <OngoingMeetingCard
-                onRejoin={() => alert("Rejoin meeting (mock)")}
-                className="h-full"
-              />
-            )}
 
             <section className="flex-1 rounded-2xl bg-white p-6 shadow border border-gray-200">
               <div className="flex items-center justify-between gap-4 mb-4">
@@ -137,7 +130,7 @@ export default function History() {
                 {filtered.map((item) => (
                   <div
                     key={item.attemptId}
-                    className="grid grid-cols-[56px_1fr_160px_110px_40px] items-center gap-2 px-4 py-3
+                    className="grid grid-cols-[56px_1fr_160px_110px_40px_minmax(84px,auto)] items-center gap-2 px-4 py-3
                                border-b last:border-b-0"
                   >
                     {/* index */}
@@ -173,22 +166,24 @@ export default function History() {
                     <div className="mx-auto text-[#4C8954]">
                       {item.solved && <CheckIcon className="h-5 w-5" />}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/history/${item.attemptId}`);
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border px-3 py-1 text-sm font-medium
+                                border-gray-300 bg-white text-gray-700 hover:bg-gray-50
+                                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      aria-label={`View details for ${item.title}`}
+                    >
+                      View
+                  </button>
                   </div>
                 ))}
               </div>
             </section>
-          </div>
-
-          {/* demo toggle for the left sidebar */}
-          <div className="mt-6 text-sm text-gray-600">
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={hasOngoingMeeting}
-                onChange={(e) => setHasOngoingMeeting(e.target.checked)}
-              />
-              Show “ongoing meeting” sidebar
-            </label>
           </div>
         </div>
       </main>

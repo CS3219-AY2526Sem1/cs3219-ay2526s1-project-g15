@@ -28,3 +28,6 @@ class VerifyCodeIn(BaseModel):
 
 class PasswordVerifyIn(BaseModel):
     password: str = Field(min_length=8)
+
+class RefreshIn(BaseModel):
+    refresh_token: str
