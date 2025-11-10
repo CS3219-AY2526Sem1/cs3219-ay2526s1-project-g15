@@ -8,7 +8,7 @@ import useCodeExecution from "../hooks/useCodeExecution";
 import useSubmission from "../hooks/useSubmission";
 
 // apis
-import { getSessionDetails, endSession } from "../../../shared/api/matchingService";
+import { getSessionDetails, leaveSession } from "../../../shared/api/matchingService";
 import { questionService } from "../../../shared/api/questionService";
 
 // components
@@ -116,23 +116,13 @@ export default function Room() {
     language,
     setLanguage,
     socketReady,
-    sessionEnded,
+    partnerLeft,
   } = useCollaborativeSession(sessionId, userId, username);
 
   const expectedFnName = useMemo(() => {
     if (!question || !question.title) return "";
     return getFunctionName(question.title);
   }, [question]);
-
-  useEffect(() => {
-    if (sessionEnded) {
-      alert("The other user ended the session. You'll be redirected.");
-      localStorage.removeItem("active_session_id");
-      setTimeout(() => {
-        navigate("/home");
-      }, 0);
-    }
-  }, [sessionEnded, navigate]);
 
   // fetch question for this session so runner can use backend test_cases
   useEffect(() => {
@@ -288,7 +278,7 @@ export default function Room() {
   const handleEndSessionConfirm = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      await endSession(sessionId, token)
+      await leaveSession(sessionId, token)
     } catch (err) {
       console.error("Failed to end session:", err);
       // even if it fails, we still navigate away
@@ -400,6 +390,7 @@ export default function Room() {
               <ConnectionStatus
                 socketReady={socketReady}
                 username={username}
+                partnerLeft={partnerLeft}
                 onLeave={handleEndSession}
               />
 
