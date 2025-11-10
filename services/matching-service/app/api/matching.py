@@ -169,7 +169,7 @@ async def confirm_timeout_task(match_id: str, timeout_seconds: int):
             db.delete(m)
             db.commit()
 
-            # (optional) notify users over WS
+            # notify users over WS
             try:
                 await manager.send_message(m.user1_id, {"type": "match_expired", "reason": "confirmation_timeout"})
                 await manager.send_message(m.user2_id, {"type": "match_expired", "reason": "confirmation_timeout"})
@@ -370,7 +370,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
     """
     Returns the confirmation + session status of a match.
     """
-    # 1) Fetch match from DB
+    # Fetch match from DB
     match = db.query(Match).filter(Match.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -383,7 +383,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
         if not existing_session:
             session_id = None  # session not ready yet
 
-    # 2) Build base response
+    # Build base response
     status = {
         "confirm_status": match.user1_confirmed and match.user2_confirmed,
         "session_id": session_id
@@ -563,7 +563,7 @@ async def leave_session(
         users.remove(user["user_id"])
         session_json["users"] = users
 
-    # optional: keep a “left_users” list
+    # keep a “left_users” list
     left_users = session_json.get("left_users", [])
     if user["user_id"] not in left_users:
         left_users.append(user["user_id"])
