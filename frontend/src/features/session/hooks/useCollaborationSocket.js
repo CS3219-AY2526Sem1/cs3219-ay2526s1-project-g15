@@ -8,13 +8,14 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     notes: "",
     users: []
   });
+  const [partnerLeft, setPartnerLeft] = useState(false);
   const socketRef = useRef(null);
 
   useEffect(() => {
     console.log("useCollaborationSocket effect running", sessionId, userId, username);
     if (!sessionId || !userId) return;
 
-    const wsUrl = `ws://localhost:8004/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
+    const wsUrl = `/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
@@ -68,6 +69,13 @@ export default function useCollaborationSocket(sessionId, userId, username) {
             users: prev.users.filter(u => u.user_id !== message.user_id)
             }));
             break;
+        case "partner_left":
+          setSessionState((prev) => ({
+            ...prev,
+            users: prev.users.filter((u) => u.user_id !== message.user_id),
+          }));
+          setPartnerLeft(true);
+          break;
         default:
             console.warn("Unhandled message:", message);
         }
@@ -95,5 +103,5 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     }
   };
 
-  return { socketReady, sessionState, sendMessage };
+  return { socketReady, sessionState, sendMessage, partnerLeft };
 }

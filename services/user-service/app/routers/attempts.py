@@ -1,10 +1,11 @@
+from http.client import HTTPException
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 
 from app.db.session import get_session
 from app.models.attempt import Attempt, UserQuestionStatus
-from app.schemas.attempt import AttemptCreate, AttemptRead, AttemptSummary
+from app.schemas.attempt import AttemptCreate, AttemptOut, AttemptRead, AttemptSummary
 from app.routers.users import get_current_user
 
 router = APIRouter(prefix="/api/v1/attempts", tags=["attempts"])
@@ -103,3 +104,20 @@ async def attempts_summary(
         solved=int(solved or 0),
         last_attempt_at=last,
     )
+
+@router.get("/{attempt_id}", response_model=AttemptOut)
+async def get_attempt(
+    attempt_id: str,
+    db: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    res = await db.execute(
+        select(Attempt)
+        .where(Attempt.user_id == user.id, Attempt.id == attempt_id)
+        .order_by(Attempt.created_at.desc())
+        .limit(1)
+    )
+    attempt = res.scalars().first()
+    if attempt is None:
+        raise HTTPException(status_code=404, detail="No attempt found")
+    return attempt

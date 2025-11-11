@@ -1,10 +1,11 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Body
 from typing import Dict, List, Optional
 import json
 from datetime import datetime
 from collections import defaultdict
 import asyncio
 import redis.asyncio as redis
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -77,7 +78,10 @@ class Session:
             "last_chat_message": self.last_chat_message.isoformat(),
             "uptime_seconds": (datetime.utcnow() - self.created_at).total_seconds()
         }
-
+    
+class SessionEndedPayload(BaseModel):
+    ended_by: Optional[str] = None
+    
 # Global storage
 active_sessions: Dict[str, Session] = {}
 
@@ -215,7 +219,8 @@ async def websocket_endpoint(
         if session.is_empty():
             print(f"Session {session_id} empty, cleaning up")
             # TODO: Save to database before deleting
-            del active_sessions[session_id]
+            if session_id in active_sessions:
+                del active_sessions[session_id]
     
     except Exception as e:
         print(f"Error in WebSocket: {e}")
@@ -329,6 +334,23 @@ async def handle_code_execution(session: Session, user_id: str, message: dict):
         "timestamp": datetime.utcnow().isoformat()
     })
 
+@router.post("/sessions/{session_id}/notify-ended")
+async def notify_session_ended(session_id: str, payload: SessionEndedPayload):
+    """
+    Called by matching-service when someone ends the session.
+    Broadcasts 'session_ended' to all connected users in that collab session.
+    """
+    await broadcast_to_session(
+        session_id,
+        {
+            "type": "session_ended",
+            "session_id": session_id,
+            "ended_by": payload.ended_by,
+        },
+        exclude_user_id=payload.ended_by,
+    )
+    print(f"Broadcasted session_ended for session {session_id}")
+    return {"status": "ok"}
 
 # REST API Endpoints for debugging and management
 

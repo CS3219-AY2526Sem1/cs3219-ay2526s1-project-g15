@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8002/api/v1/matching";
+const BASE_URL = "/api/v1/matching";
 
 /**
  * Create a match request
@@ -60,7 +60,7 @@ export async function confirmMatch(data, token) {
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json(); 
+  return res.json();
   // if confirmed: { match_id, session_id, question_id, partner_id }
   // if cancelled: { status: "cancelled", requeued_partner, match_id }
 }
@@ -80,7 +80,7 @@ export async function getMatchStatus(matchId, token) {
 
   if (!res.ok) throw new Error(await res.text());
 
-  return res.json(); 
+  return res.json();
   // Example response:
   // { confirm_status: true, session_id: "e5aa6c95-f06b-46aa-991a-ea98c624d825" }
 }
@@ -97,6 +97,24 @@ export async function getSessionDetails(sessionId, token) {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
+ * Leave a collaboration session
+ * @param {string} sessionId
+ * @param {string} token
+ */
+export async function leaveSession(sessionId, token) {
+  const res = await fetch(`${BASE_URL}/sessions/leave`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -126,4 +144,3 @@ export function connectMatchingWebSocket(token, onMessage) {
 
   return ws;
 }
-

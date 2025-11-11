@@ -15,13 +15,16 @@ class QuestionClient:
         self.base_url = base_url
         self.base_path = QUESTION_SERVICE_BASE_PATH
 
-    async def _get(self, session, path, params, retries=2, timeout=3.0):
+    async def _get(self, session, path, params, token=None, retries=2, timeout=3.0):
         attempt = 0
         url = f"{self.base_url}{self.base_path}{path}"
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         while True:
             try:
                 # Perform the GET request
-                async with session.get(url, params=params, timeout=timeout) as resp:
+                async with session.get(url, params=params, headers=headers, timeout=timeout) as resp:
                     if resp.status == 200:
                         return await resp.json()
                     text = await resp.text()
@@ -35,7 +38,8 @@ class QuestionClient:
     async def pick_question(
         self,
         difficulty: Optional[str],
-        topics: Optional[List[str]]
+        topics: Optional[List[str]],
+        token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Select a random question from the Question Service that matches
@@ -48,7 +52,7 @@ class QuestionClient:
             params["topics"] = topics          # FastAPI accepts repeated params
 
         async with aiohttp.ClientSession() as session:
-            data = await self._get(session, "/questions/filter/topics-difficulty", params)
+            data = await self._get(session, "/questions/filter/topics-difficulty", params, token=token)
 
         if not data:
             raise RuntimeError("No questions available for the given filters.")

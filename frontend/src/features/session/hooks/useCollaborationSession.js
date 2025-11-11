@@ -6,7 +6,7 @@ export default function useCollaborativeSession(sessionId, userId, username) {
   const [language, setLanguage] = useState("javascript");
   const [chatMessages, setChatMessages] = useState([]);
 
-  const { socketReady, sessionState, sendMessage } =
+  const { socketReady, sessionState, sendMessage, partnerLeft } =
     useCollaborationSocket(sessionId, userId, username);
 
   // update editor from incoming sessionState
@@ -63,5 +63,6 @@ export default function useCollaborativeSession(sessionId, userId, username) {
     sendChatMessage,
     socketReady,
     sessionState,
+    partnerLeft,
   };
 }

@@ -1,8 +1,9 @@
 import asyncio
 import uuid, time
+import httpx
 from typing import Union, Optional, Dict
 from jose import jwt, JWTError, ExpiredSignatureError
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, Request, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import verify_token
@@ -12,10 +13,11 @@ from app.schemas.matching import (
     MatchRequestCreate, 
     MatchRequestResponse,
     MatchRequestStatusResponse,
-    MatchFoundResponse,
     MatchConfirmRequest,
     MatchConfirmedResponse,
-    MatchCancelledResponse
+    MatchCancelledResponse,
+    ActiveSessionResponse,
+    EndSessionRequest,
 )
 from app.services.matching_service import matching_service
 from app.models.match_request import MatchRequest, MatchStatus
@@ -24,7 +26,9 @@ from app.clients.question_client import QuestionClient
 from shared.messaging.rabbitmq_client import RabbitMQClient
 import json
 import traceback
+
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter()
 qclient = QuestionClient()
@@ -165,7 +169,7 @@ async def confirm_timeout_task(match_id: str, timeout_seconds: int):
             db.delete(m)
             db.commit()
 
-            # (optional) notify users over WS
+            # notify users over WS
             try:
                 await manager.send_message(m.user1_id, {"type": "match_expired", "reason": "confirmation_timeout"})
                 await manager.send_message(m.user2_id, {"type": "match_expired", "reason": "confirmation_timeout"})
@@ -231,7 +235,8 @@ async def cancel_match_request(
 async def confirm_match(
     confirmation: MatchConfirmRequest,
     user: dict = Depends(verify_token),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=True))
 ):
     """
     Confirm match and create collaboration session
@@ -288,9 +293,12 @@ async def confirm_match(
                 else match.difficulty
             )
             topic_val = match.topic
+            # Forward the user's token to the question service
+            token = credentials.credentials if credentials else None
             question = await qclient.pick_question(
                 difficulty=difficulty_val.lower(),
-                topics=[topic_val]
+                topics=[topic_val],
+                token=token
             )
 
             # Initialize collaboration session in Redis
@@ -362,7 +370,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
     """
     Returns the confirmation + session status of a match.
     """
-    # 1) Fetch match from DB
+    # Fetch match from DB
     match = db.query(Match).filter(Match.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -375,7 +383,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
         if not existing_session:
             session_id = None  # session not ready yet
 
-    # 2) Build base response
+    # Build base response
     status = {
         "confirm_status": match.user1_confirmed and match.user2_confirmed,
         "session_id": session_id
@@ -454,3 +462,125 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         finally:
             if user_id:
                 manager.disconnect(user_id)
+
+@router.get("/sessions/active", response_model=ActiveSessionResponse)
+async def get_active_session_for_user(
+    user: dict = Depends(verify_token),
+    db: Session = Depends(get_db),
+    redis_client = Depends(get_redis_client),
+):
+    """
+    Return active collab session for this user.
+    1. Try DB (normal flow)
+    2. If DB has nothing (e.g. service restarted), fall back to Redis scan
+    """
+    user_id = user["user_id"]
+
+    # 1) try DB
+    query = db.query(Match).filter(
+        (Match.user1_id == user_id) | (Match.user2_id == user_id)
+    )
+    match = query.first()
+
+    if match:
+        # must be fully confirmed
+        if not (match.user1_confirmed and match.user2_confirmed):
+            raise HTTPException(status_code=404, detail="No active session")
+
+        session_id = (
+            getattr(match, "session_id", None)
+            or getattr(match, "collaboration_session_id", None)
+        )
+        if session_id:
+            data = await redis_client.get(session_id)
+            if data:
+                session_json = json.loads(data)
+                partner_id = match.user2_id if match.user1_id == user_id else match.user1_id
+                return ActiveSessionResponse(
+                    match_id=match.id,
+                    session_id=session_id,
+                    partner_id=partner_id,
+                    question=session_json.get("question", {}),
+                )
+
+    # 2) fallback: scan redis for any session that has this user
+    cursor = b"0"
+    found_session: Optional[dict] = None
+    found_session_id: Optional[str] = None
+
+    while True:
+        cursor, keys = await redis_client.scan(cursor=cursor, match="*")
+        for key in keys:
+            raw = await redis_client.get(key)
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            users = obj.get("users") or []
+            # users in your redis payload are like ["user1", "user2"]
+            if user_id in users:
+                found_session = obj
+                found_session_id = key.decode() if isinstance(key, bytes) else key
+                break
+
+        if found_session or cursor == b"0":
+            break
+
+    if not found_session:
+        raise HTTPException(status_code=404, detail="No active session")
+
+    other_users = [u for u in found_session.get("users", []) if u != user_id]
+    partner_id = other_users[0] if other_users else ""
+
+    return ActiveSessionResponse(
+        match_id="",
+        session_id=found_session_id,
+        partner_id=partner_id,
+        question=found_session.get("question", {}),
+    )
+
+@router.post("/sessions/leave")
+async def leave_session(
+    body: EndSessionRequest,
+    user: dict = Depends(verify_token),
+    db: Session = Depends(get_db),
+    redis_client = Depends(get_redis_client),
+):
+    session_id = body.session_id
+    raw = await redis_client.get(session_id)
+    if not raw:
+        # session already gone, just return ok so frontend doesn't explode
+        return {"status": "ok"}
+
+    session_json = json.loads(raw)
+
+    # mark that this user left
+    users = session_json.get("users", [])
+    if user["user_id"] in users:
+        users.remove(user["user_id"])
+        session_json["users"] = users
+
+    # keep a “left_users” list
+    left_users = session_json.get("left_users", [])
+    if user["user_id"] not in left_users:
+        left_users.append(user["user_id"])
+    session_json["left_users"] = left_users
+
+    # write back
+    await redis_client.set(session_id, json.dumps(session_json))
+
+    # notify other user(s) over websocket
+    for u in users:  # users now = remaining users
+        try:
+            await manager.send_message(u, {
+                "type": "partner_left",
+                "session_id": session_id,
+                "user_id": user["user_id"],
+            })
+        except Exception:
+            pass
+
+    return {"status": "left"}

@@ -65,9 +65,6 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Keys
-gcp-keys/
-
 # Local scripts
 tests/
 scripts/truncate_db.py

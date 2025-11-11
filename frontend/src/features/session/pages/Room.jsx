@@ -8,7 +8,7 @@ import useCodeExecution from "../hooks/useCodeExecution";
 import useSubmission from "../hooks/useSubmission";
 
 // apis
-import { getSessionDetails } from "../../../shared/api/matchingService";
+import { getSessionDetails, leaveSession } from "../../../shared/api/matchingService";
 import { questionService } from "../../../shared/api/questionService";
 
 // components
@@ -25,7 +25,7 @@ import {
 } from "../components/code_panel";
 
 import { getFunctionName } from "../../../shared/utils/HarnessBuilders";
-import { prettyPrintInput, prettyPrintOutput, parseRelaxed  } from "../../../shared/utils/ioFormat";
+import { prettyPrintInput, prettyPrintOutput, parseRelaxed } from "../../../shared/utils/ioFormat";
 import { filenameByLang } from "../constants";
 
 // some outputs have "" but others don't --> need helpers to compare outputs
@@ -87,6 +87,12 @@ export default function Room() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
 
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem("active_session_id", sessionId);
+    }
+  }, [sessionId]);
+
   const {
     user,
     userId,
@@ -114,6 +120,7 @@ export default function Room() {
     chatMessages,
     sendChatMessage,
     socketReady,
+    partnerLeft,
     sessionState
   } = useCollaborativeSession(sessionId, userId, username);
 
@@ -153,7 +160,6 @@ export default function Room() {
 
     fetchQuestionForSession();
   }, [sessionId]);
-
 
   const runnerQuestion = useMemo(() => {
     if (question) {
@@ -275,82 +281,98 @@ export default function Room() {
     setShowLeaveConfirm(true);
   };
 
+  const handleEndSessionConfirm = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      await leaveSession(sessionId, token)
+    } catch (err) {
+      console.error("Failed to end session:", err);
+      // even if it fails, we still navigate away
+    }
+
+    // clear client-side rememberance
+    localStorage.removeItem("active_session_id");
+
+    // go back home
+    navigate("/home");
+  };
+
   /**
    * UI-friendly tests
    */
   const uiTests = useMemo(() => {
-  if (!question || !Array.isArray(question.test_cases)) return [];
-  return question.test_cases.map((tc) => {
-    // normalise input
-    let parsedInput = tc.input;
-    if (typeof tc.input === "string") {
-      // try relaxed first
-      const relaxed = parseRelaxed(tc.input);
-      if (relaxed !== null) {
-        parsedInput = relaxed;
-      } else {
-        // then strict JSON
-        try {
-          parsedInput = JSON.parse(tc.input);
-        } catch {
-          parsedInput = tc.input; // leave as string
+    if (!question || !Array.isArray(question.test_cases)) return [];
+    return question.test_cases.map((tc) => {
+      // normalise input
+      let parsedInput = tc.input;
+      if (typeof tc.input === "string") {
+        // try relaxed first
+        const relaxed = parseRelaxed(tc.input);
+        if (relaxed !== null) {
+          parsedInput = relaxed;
+        } else {
+          // then strict JSON
+          try {
+            parsedInput = JSON.parse(tc.input);
+          } catch {
+            parsedInput = tc.input; // leave as string
+          }
         }
       }
-    }
 
-    // normalize output
-    let outputDisplay;
-    if (typeof tc.output === "string") {
-      outputDisplay = tc.output;
-    } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
-      outputDisplay = JSON.stringify(tc.output, null, 2);
-    } else {
-      outputDisplay = prettyPrintOutput(tc.output);
-    }
+      // normalize output
+      let outputDisplay;
+      if (typeof tc.output === "string") {
+        outputDisplay = tc.output;
+      } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
+        outputDisplay = JSON.stringify(tc.output, null, 2);
+      } else {
+        outputDisplay = prettyPrintOutput(tc.output);
+      }
 
-    return {
-      inputDisplay: prettyPrintInput(parsedInput),
-      outputDisplay,
-      explanation: tc.explanation || "",
-      // keep original just in case
-      input: parsedInput,
-      output: tc.output,
-    };
-  });
-}, [question]);
+      return {
+        inputDisplay: prettyPrintInput(parsedInput),
+        outputDisplay,
+        explanation: tc.explanation || "",
+        // keep original just in case
+        input: parsedInput,
+        output: tc.output,
+      };
+    });
+  }, [question]);
 
-const testsWithVerdict = useMemo(() => {
-  // uiTests is in the same order as backend test_cases
-  return uiTests.map((tc, idx) => {
-    const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
+  const testsWithVerdict = useMemo(() => {
+    // uiTests is in the same order as backend test_cases
+    return uiTests.map((tc, idx) => {
+      const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
 
-    const userOut =
-      actualFromRunner && typeof actualFromRunner === "object"
-        ? 
+      const userOut =
+        actualFromRunner && typeof actualFromRunner === "object"
+          ?
           (actualFromRunner.output ?? actualFromRunner.actual ?? actualFromRunner.result ?? actualFromRunner)
-        : actualFromRunner;
+          : actualFromRunner;
 
-    // compare with original tc.output (not display), fall back to display
-    const expectedForCompare =
-      tc.output !== undefined ? tc.output : tc.outputDisplay;
+      // compare with original tc.output (not display), fall back to display
+      const expectedForCompare =
+        tc.output !== undefined ? tc.output : tc.outputDisplay;
 
-    const isCorrect =
-      userOut !== undefined
-        ? outputsMatch(expectedForCompare, userOut)
-        : false;
+      const isCorrect =
+        userOut !== undefined
+          ? outputsMatch(expectedForCompare, userOut)
+          : false;
 
-    return {
-      ...tc,
-      status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
-      userOutput:
-        userOut === undefined
-          ? ""
-          : typeof userOut === "string"
-          ? userOut
-          : JSON.stringify(userOut, null, 2),
-    };
-  });
-}, [uiTests, caseOutputs]);
+      return {
+        ...tc,
+        status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
+        userOutput:
+          userOut === undefined
+            ? ""
+            : typeof userOut === "string"
+              ? userOut
+              : JSON.stringify(userOut, null, 2),
+      };
+    });
+  }, [uiTests, caseOutputs]);
 
 
   return (
@@ -374,13 +396,15 @@ const testsWithVerdict = useMemo(() => {
               <ConnectionStatus
                 socketReady={socketReady}
                 username={username}
+                partnerLeft={partnerLeft}
                 onLeave={handleEndSession}
               />
 
               {showLeaveConfirm && (
                 <EndSessionModal
                   setShowLeaveConfirm={setShowLeaveConfirm}
-                  navigate={navigate}
+                  onConfirm={handleEndSessionConfirm}
+                  onCancel={() => setShowLeaveConfirm(false)}
                 />
               )}
 

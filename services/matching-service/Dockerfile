@@ -1,24 +1,18 @@
-FROM python:3.12-slim
+FROM python:3.11
 
-# Create app dir
-WORKDIR /app
-
-# System deps
+# System deps for psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl postgresql-client && \
+    build-essential gcc libpq-dev curl postgresql-client && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first
-COPY requirements.txt .
+WORKDIR /app
 
-# Install Python deps
+# Install deps first (cache)
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the app
+# Copy the rest of the service
 COPY . .
 
-# Expose the FastAPI port
 EXPOSE 8002
-
-# Run migrations then start the app
 CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002
