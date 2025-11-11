@@ -43,6 +43,7 @@ async def handle_session_created(payload):
         "partner": partner_id,
         "language": "python",
         "code": "",
+        "chat": []
     }
 
     await redis_client.set(session_id, json.dumps(session_data))

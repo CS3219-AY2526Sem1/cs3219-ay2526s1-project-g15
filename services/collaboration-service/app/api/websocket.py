@@ -16,11 +16,11 @@ class Session:
         self.question_id = question_id
         self.users: Dict[str, dict] = {}
         self.code: str = ""
-        self.notes: str = ""
+        self.chat: List[dict] = []
         self.language: str = "python"
         self.created_at = datetime.utcnow()
         self.last_code_update = datetime.utcnow()
-        self.last_notes_update = datetime.utcnow()
+        self.last_chat_message = datetime.utcnow()
     
     def add_user(self, user_id: str, websocket: WebSocket, username: str = None):
         self.users[user_id] = {
@@ -55,7 +55,7 @@ class Session:
             "session_id": self.session_id,
             "question_id": self.question_id,
             "code": self.code,
-            "notes": self.notes,
+            "chat": self.chat,
             "language": self.language,
             "users": [
                 {
@@ -73,9 +73,9 @@ class Session:
             "session_id": self.session_id,
             "user_count": len(self.users),
             "code_length": len(self.code),
-            "notes_length": len(self.notes),
+            "chat_length": len(self.chat),
             "last_code_update": self.last_code_update.isoformat(),
-            "last_notes_update": self.last_notes_update.isoformat(),
+            "last_chat_message": self.last_chat_message.isoformat(),
             "uptime_seconds": (datetime.utcnow() - self.created_at).total_seconds()
         }
     
@@ -145,6 +145,7 @@ async def websocket_endpoint(
             session = Session(session_id=session_id, question_id=session_data["question"]["id"])
             session.code = session_data.get("code", "")
             session.language = session_data.get("language", "python")
+            session.chat = session_data.get("chat", [])
             active_sessions[session_id] = session
         else:
             # Session not found anywhere, error
@@ -183,8 +184,8 @@ async def websocket_endpoint(
             elif msg_type == "cursor_move":
                 await handle_cursor_move(session, user_id, message)
             
-            elif msg_type == "notes_update":
-                await handle_notes_update(session, user_id, message)
+            elif msg_type == "chat_message":
+                await handle_chat_update(session, user_id, message)
             
             elif msg_type == "language_change":
                 await handle_language_change(session, user_id, message)
@@ -268,21 +269,31 @@ async def handle_cursor_move(session: Session, user_id: str, message: dict):
     }, exclude_user_id=user_id)
 
 
-async def handle_notes_update(session: Session, user_id: str, message: dict):
-    """
-    Handle collaborative notes updates
-    Syncs automatically as users type
-    """
-    if "notes" in message:
-        session.notes = message["notes"]
-        session.last_notes_update = datetime.utcnow()
-    
-    await broadcast_to_session(session.session_id, {
-        "type": "notes_update",
+async def handle_chat_update(session: Session, user_id: str, message: dict):
+    text = message.get("text", "").strip()
+    if not text:
+        return
+
+    payload = {
+        "type": "chat_message",
         "user_id": user_id,
-        "notes": session.notes,
+        "username": session.users[user_id]["username"],
+        "text": text,
         "timestamp": datetime.utcnow().isoformat()
-    }, exclude_user_id=user_id)
+    }
+
+    session.chat.append(payload)
+
+    await redis_client.set(session.session_id, json.dumps({
+        "match_id": session.question_id,  # optional
+        "session_id": session.session_id,
+        "question": {"id": session.question_id},
+        "language": session.language,
+        "code": session.code,
+        "chat": session.chat
+    }))
+
+    await broadcast_to_session(session.session_id, payload)
 
 
 async def handle_language_change(session: Session, user_id: str, message: dict):

@@ -31,7 +31,10 @@ export default function useCollaborationSocket(sessionId, userId, username) {
         case "session_state":
             setSessionState(prev => ({
               ...prev,
-              status: message.data ? "ready" : "preparing"
+              status: message.data ? "ready" : "preparing",
+              code: message.data.code || "",
+              chatMessages: message.data.chat || [],
+              users: message.data.users || [],
             }));
             break;
         case "code_update":
@@ -45,10 +48,10 @@ export default function useCollaborationSocket(sessionId, userId, username) {
             )
             }));
             break;
-        case "notes_update":
+        case "chat_message":
             setSessionState(prev => ({
-            ...prev,
-            notes: message.notes
+              ...prev,
+              chatMessages: [...(prev.chatMessages || []), message],
             }));
             break;
         case "language_change":
