@@ -1,5 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime
 from collections import defaultdict
@@ -14,12 +14,17 @@ class Session:
         self.session_id = session_id
         self.question_id = question_id
         self.users: Dict[str, dict] = {}
-        self.code: str = ""
+        self.code_lines: List[str] = []
         self.chat: List[dict] = []
         self.language: str = "python"
         self.created_at = datetime.utcnow()
         self.last_code_update = datetime.utcnow()
         self.last_chat_message = datetime.utcnow()
+        self.line_locks: Dict[int, str] = {}
+    
+    def code(self) -> str:
+        """Return full code as a single string if needed."""
+        return "\n".join(self.code_lines)
     
     def add_user(self, user_id: str, websocket: WebSocket, username: str = None):
         self.users[user_id] = {
@@ -64,6 +69,7 @@ class Session:
                 }
                 for uid, user in self.users.items()
             ],
+            "locks": self.line_locks,
             "created_at": self.created_at.isoformat()
         }
     
@@ -97,6 +103,7 @@ async def broadcast_to_session(
     for ws in websockets:
         try:
             await ws.send_json(message)
+            print(f"Broadcasted {message} to {session_id}")
         except Exception as e:
             print(f"Error broadcasting: {e}")
             disconnected.append(ws)
@@ -174,8 +181,13 @@ async def websocket_endpoint(
             msg_type = message.get("type")
             
             # Handle different message types
-            if msg_type == "code_update":
+            if msg_type == "line_update":
+                print("Received line update")
+                print(message)
                 await handle_code_update(session, user_id, message)
+            
+            elif msg_type == "request_line_lock":
+                await handle_line_lock(session, user_id, message)
             
             elif msg_type == "cursor_move":
                 await handle_cursor_move(session, user_id, message)
@@ -203,6 +215,10 @@ async def websocket_endpoint(
         print(f"{username or user_id} disconnected from {session_id}")
         
         session.remove_user(user_id)
+        session.line_locks = {
+            line: uid for line, uid in session.line_locks.items() if uid != user_id
+        }
+
         
         # Notify others
         await broadcast_to_session(session_id, {
@@ -227,23 +243,52 @@ async def handle_code_update(session: Session, user_id: str, message: dict):
     Handle real-time code updates
     Updates are sent automatically as user types (debounced by frontend)
     """
-    if "code" in message:
-        session.code = message["code"]
-        session.last_code_update = datetime.utcnow()
-    
-    # Update cursor if provided
-    if "cursor" in message:
-        session.update_user_cursor(user_id, message["cursor"])
-    
-    # Broadcast immediately to other users
-    await broadcast_to_session(session.session_id, {
-        "type": "code_update",
-        "user_id": user_id,
-        "code": session.code,
-        "cursor": message.get("cursor"),
-        "timestamp": datetime.utcnow().isoformat()
-    }, exclude_user_id=user_id)
+    line_number = message.get("line_number")
+    new_content = message.get("content")
 
+    print(f"Received line update: {line_number}, {new_content}")
+
+    if line_number is not None and new_content is not None:
+        if line_number < 1:
+            return
+        while len(session.code_lines) < line_number:
+            session.code_lines.append("")
+
+        session.code_lines[line_number - 1] = new_content
+        print(f"Updated whole code: {session.code_lines}")
+        print(f"Updated line {line_number}: {new_content}")
+    elif "code" in message:
+        session.code_lines = message["code"].splitlines()
+
+    session.last_code_update = datetime.utcnow()
+
+    # Persist the session to Redis
+    await redis_client.set(session.session_id, json.dumps({
+        "question_id": session.question_id,
+        "session_id": session.session_id,
+        "question": {"id": session.question_id},
+        "language": session.language,
+        "code": session.code_lines,
+        "chat": session.chat
+    }))
+
+    # Broadcast only the updated line
+    payload: dict[str, Any] = {
+        "type": "line_update",
+        "user_id": user_id,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+    if line_number is not None and new_content is not None:
+        payload.update({
+            "line_number": line_number,
+            "content": new_content
+        })
+    else:
+        payload["code"] = session.code_lines
+    
+    print(f"Broadcasting: {payload}")
+    await broadcast_to_session(session.session_id, payload, exclude_user_id=user_id)
 
 async def handle_cursor_move(session: Session, user_id: str, message: dict):
     """
@@ -328,6 +373,47 @@ async def handle_code_execution(session: Session, user_id: str, message: dict):
         "status": "pending",
         "timestamp": datetime.utcnow().isoformat()
     })
+
+async def handle_line_lock(session: Session, user_id: str, message: dict):
+    """
+    Handle line lock requests (when a user starts editing a line)
+    - Prevents others from editing the same line
+    - Broadcasts lock updates to all users
+    """
+    line_number = message.get("line_number")
+    action = message.get("action", "lock")  # 'lock' or 'unlock'
+
+    if line_number is None:
+        return
+
+    # --- Locking a line ---
+    if action == "lock":
+        # Check if the line is already locked by someone else
+        current_owner = session.line_locks.get(line_number)
+        if current_owner and current_owner != user_id:
+            # Tell the requester it’s already locked
+            await session.users[user_id]["websocket"].send_json({
+                "type": "line_lock_denied",
+                "line_number": line_number,
+                "locked_by": current_owner
+            })
+            return
+
+        # Lock it for this user
+        session.line_locks[line_number] = user_id
+
+    # --- Unlocking a line ---
+    elif action == "unlock":
+        if session.line_locks.get(line_number) == user_id:
+            del session.line_locks[line_number]
+
+    # Broadcast the entire lock state
+    await broadcast_to_session(session.session_id, {
+        "type": "line_lock_update",
+        "locks": session.line_locks,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
 
 
 # REST API Endpoints for debugging and management

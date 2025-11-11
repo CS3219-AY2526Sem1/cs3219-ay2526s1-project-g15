@@ -6,7 +6,9 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     status: "preparing",
     code: "",
     notes: "",
-    users: []
+    users: [],
+    chatMessages: [],
+    lineLocks: {},
   });
   const socketRef = useRef(null);
 
@@ -36,17 +38,40 @@ export default function useCollaborationSocket(sessionId, userId, username) {
               users: message.data.users || [],
             }));
             break;
-        case "code_update":
-            setSessionState(prev => ({
-            ...prev,
-            code: message.code,
-            users: prev.users.map(u =>
-                u.user_id === message.user_id
-                ? { ...u, cursor: message.cursor }
-                : u
-            )
+        case "line_update": {
+            console.log("Received line update:", message);
+            const { user_id, line_number, content } = message;
+            setSessionState(prev => {
+              const model = Array.isArray(prev.code) ? [...prev.code] : prev.code.split("\n");
+
+              // Extend array if needed
+              while (model.length < line_number) model.push("");
+
+              // Update the specific line (Monaco lines are 1-indexed)
+              model[line_number - 1] = content;
+
+              return {
+                ...prev,
+                code: model, // always array
+                users: prev.users.map(u =>
+                  u.user_id === user_id ? { ...u, cursor: u.cursor } : u
+                ),
+              };
+            });
+            break;
+        }
+        case "line_lock_update":
+            setSessionState((prev) => ({
+              ...prev,
+              lineLocks: message.locks || {},
             }));
             break;
+        case "line_lock_denied": {
+            const { line_number, locked_by } = message;
+            console.warn(`Line ${line_number} is locked by ${locked_by}`);
+            // optionally: show UI feedback, disable editing for this line
+            break;
+        }
         case "chat_message":
             setSessionState(prev => ({
               ...prev,
@@ -91,9 +116,16 @@ export default function useCollaborationSocket(sessionId, userId, username) {
   // Helper to send JSON messages
   const sendMessage = (type, data = {}) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
+      console.log("Sending message:", type, data);
       socketRef.current.send(JSON.stringify({ type, ...data }));
     }
   };
 
-  return { socketReady, sessionState, sendMessage };
+  const requestLineLock = (line) =>
+    sendMessage("request_line_lock", { line_number: line, action: "lock" });
+
+  const releaseLineLock = (line) =>
+    sendMessage("request_line_lock", { line_number: line, action: "unlock" });
+
+  return { socketReady, sessionState, sendMessage, requestLineLock, releaseLineLock };
 }

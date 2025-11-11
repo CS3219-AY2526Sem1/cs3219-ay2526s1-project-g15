@@ -107,14 +107,19 @@ export default function Room() {
 
   // collaborative session hook
   const {
+    codeLines,
+    setCodeLines,
     code,
-    setCode,
+    updateLine,
     language,
     setLanguage,
     chatMessages,
     sendChatMessage,
     socketReady,
-    sessionState
+    sessionState,
+    lineLocks,
+    requestLock,
+    releaseLock,
   } = useCollaborativeSession(sessionId, userId, username);
 
   const expectedFnName = useMemo(() => {
@@ -279,79 +284,78 @@ export default function Room() {
    * UI-friendly tests
    */
   const uiTests = useMemo(() => {
-  if (!question || !Array.isArray(question.test_cases)) return [];
-  return question.test_cases.map((tc) => {
-    // normalise input
-    let parsedInput = tc.input;
-    if (typeof tc.input === "string") {
-      // try relaxed first
-      const relaxed = parseRelaxed(tc.input);
-      if (relaxed !== null) {
-        parsedInput = relaxed;
-      } else {
-        // then strict JSON
-        try {
-          parsedInput = JSON.parse(tc.input);
-        } catch {
-          parsedInput = tc.input; // leave as string
+    if (!question || !Array.isArray(question.test_cases)) return [];
+    return question.test_cases.map((tc) => {
+      // normalise input
+      let parsedInput = tc.input;
+      if (typeof tc.input === "string") {
+        // try relaxed first
+        const relaxed = parseRelaxed(tc.input);
+        if (relaxed !== null) {
+          parsedInput = relaxed;
+        } else {
+          // then strict JSON
+          try {
+            parsedInput = JSON.parse(tc.input);
+          } catch {
+            parsedInput = tc.input; // leave as string
+          }
         }
       }
-    }
 
-    // normalize output
-    let outputDisplay;
-    if (typeof tc.output === "string") {
-      outputDisplay = tc.output;
-    } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
-      outputDisplay = JSON.stringify(tc.output, null, 2);
-    } else {
-      outputDisplay = prettyPrintOutput(tc.output);
-    }
+      // normalize output
+      let outputDisplay;
+      if (typeof tc.output === "string") {
+        outputDisplay = tc.output;
+      } else if (Array.isArray(tc.output) || typeof tc.output === "object") {
+        outputDisplay = JSON.stringify(tc.output, null, 2);
+      } else {
+        outputDisplay = prettyPrintOutput(tc.output);
+      }
 
-    return {
-      inputDisplay: prettyPrintInput(parsedInput),
-      outputDisplay,
-      explanation: tc.explanation || "",
-      // keep original just in case
-      input: parsedInput,
-      output: tc.output,
-    };
-  });
-}, [question]);
+      return {
+        inputDisplay: prettyPrintInput(parsedInput),
+        outputDisplay,
+        explanation: tc.explanation || "",
+        // keep original just in case
+        input: parsedInput,
+        output: tc.output,
+      };
+    });
+  }, [question]);
 
-const testsWithVerdict = useMemo(() => {
-  // uiTests is in the same order as backend test_cases
-  return uiTests.map((tc, idx) => {
-    const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
+  const testsWithVerdict = useMemo(() => {
+    // uiTests is in the same order as backend test_cases
+    return uiTests.map((tc, idx) => {
+      const actualFromRunner = caseOutputs?.[idx + 1] ?? caseOutputs?.[idx];
 
-    const userOut =
-      actualFromRunner && typeof actualFromRunner === "object"
-        ? 
-          (actualFromRunner.output ?? actualFromRunner.actual ?? actualFromRunner.result ?? actualFromRunner)
-        : actualFromRunner;
+      const userOut =
+        actualFromRunner && typeof actualFromRunner === "object"
+          ? 
+            (actualFromRunner.output ?? actualFromRunner.actual ?? actualFromRunner.result ?? actualFromRunner)
+          : actualFromRunner;
 
-    // compare with original tc.output (not display), fall back to display
-    const expectedForCompare =
-      tc.output !== undefined ? tc.output : tc.outputDisplay;
+      // compare with original tc.output (not display), fall back to display
+      const expectedForCompare =
+        tc.output !== undefined ? tc.output : tc.outputDisplay;
 
-    const isCorrect =
-      userOut !== undefined
-        ? outputsMatch(expectedForCompare, userOut)
-        : false;
+      const isCorrect =
+        userOut !== undefined
+          ? outputsMatch(expectedForCompare, userOut)
+          : false;
 
-    return {
-      ...tc,
-      status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
-      userOutput:
-        userOut === undefined
-          ? ""
-          : typeof userOut === "string"
-          ? userOut
-          : JSON.stringify(userOut, null, 2),
-    };
-  });
-}, [uiTests, caseOutputs]);
-
+      return {
+        ...tc,
+        status: userOut === undefined ? "pending" : isCorrect ? "pass" : "fail",
+        userOutput:
+          userOut === undefined
+            ? ""
+            : typeof userOut === "string"
+            ? userOut
+            : JSON.stringify(userOut, null, 2),
+      };
+    });
+  }, [uiTests, caseOutputs]);
 
   return (
     <div className="min-h-screen bg-[#D7D6E6] flex flex-col">
@@ -389,11 +393,18 @@ const testsWithVerdict = useMemo(() => {
                 language={language}
                 onLanguageChange={setLanguage}
                 value={code}
-                onChange={setCode}
+                codeLines={codeLines}
+                onChange={(newCode, lineNumber) => updateLine(newCode, lineNumber)}
                 onRun={() => runCode(code, language)}
                 onSubmit={handleSubmit}
                 expectedFnName={expectedFnName}
                 isRunning={isRunning}
+                username={username}
+                sessionId={sessionId}
+                userId={userId}
+                lockedLines={lineLocks}
+                requestLock={requestLock}
+                releaseLock={releaseLock}
               />
 
               <TestCases

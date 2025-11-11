@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 
 const LABELS = {
@@ -25,6 +25,7 @@ function buildSignature(name, lang) {
 
 export default function CodeEditor({
   value,
+  codeLines,
   onChange,
   language = "javascript",
   onLanguageChange,
@@ -36,9 +37,16 @@ export default function CodeEditor({
   expectedFnName = "",
   isRunning = false,
   readOnly = false,
+  userId,
+  username,
+  sessionId,
+  lockedLines,
+  requestLock,
+  releaseLock,
 }) {
   const [localRunning, setLocalRunning] = useState(false);
   const [localSubmitting, setLocalSubmitting] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
 
   const isRunningNow = isRunning || localRunning;
   const isSubmittingNow = localSubmitting;
@@ -73,6 +81,7 @@ export default function CodeEditor({
   }, [onSubmit, value, language, busy, readOnly]);
 
   // keyboard shortcut: Ctrl/Cmd + Enter to Run
+  /*
   useEffect(() => {
     if (readOnly) return;
     const onKey = (e) => {
@@ -85,11 +94,83 @@ export default function CodeEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [handleRun, readOnly]);
+  */
 
   const displaySignature = useMemo(
     () => buildSignature(expectedFnName, language),
     [expectedFnName, language]
   );
+  
+
+  // Line Lock System
+  const currentLockedLineRef = useRef(null); // line number we hold lock for
+  const editorRef = useRef(null); 
+  const monacoRef = useRef(null);
+
+  function handleEditorMount(editor, monaco) {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    const getValidLineContent = (line) => {
+      const model = editor.getModel();
+      if (!model) return null;
+      if (line >= 1 && line <= model.getLineCount()) {
+        return model.getLineContent(line);
+      }
+      return null;
+    };
+
+    editor.onDidChangeCursorPosition((e) => {
+      const newLine = e.position.lineNumber;
+      const oldLine = currentLockedLineRef.current;
+      console.log("newLine", newLine, "oldLine", oldLine)
+      if (newLine !== oldLine) {
+        const oldLineContent = getValidLineContent(oldLine);
+        releaseLock?.(oldLine);
+        if (oldLineContent !== null) {
+          onChange?.(oldLineContent, oldLine);
+        }
+
+        requestLock?.(newLine);
+        currentLockedLineRef.current = newLine
+      }
+    });
+    
+    // on blur -> release lock held by this user (release specific line)
+    /*
+    editor.onDidBlurEditorText(() => {
+      const line = currentLockedLineRef.current || 1;
+      if (!line) return;
+
+      const content = getValidLineContent(line);
+      if (content !== null) {
+        onChange?.(content, line);
+      }
+
+      releaseLock?.(line);
+      currentLockedLineRef.current = null;
+    });
+    */
+  }
+
+  /*
+  useEffect(() => {
+    if (!editorRef.current || !codeLines) return;
+
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    // ✅ update each line if it changed
+    codeLines.forEach((line, i) => {
+      const existing = model.getLineContent(i + 1);
+      if (existing !== line) {
+        const range = new monacoRef.current.Range(i + 1, 1, i + 1, existing.length + 1);
+        model.pushEditOperations([], [{ range, text: line }], () => null);
+      }
+    });
+  }, [codeLines]);
+  */
+
+
 
   return (
     <div className="rounded-2xl border border-gray-300 overflow-hidden">
@@ -127,8 +208,8 @@ export default function CodeEditor({
                 type="button"
                 onClick={handleRun}
                 disabled={busy}
-                aria-label="Run (Ctrl/⌘ + Enter)"
-                title="Run (Ctrl/⌘ + Enter)"
+                aria-label="Run"
+                title="Run"
                 className="group inline-flex h-7 w-7 items-center justify-center rounded-full
                          border border-gray-600 bg-gray-700 hover:bg-emerald-600
                          disabled:opacity-60"
@@ -182,12 +263,18 @@ export default function CodeEditor({
         </div>
       )}
 
+
+
       <Editor
         height={height}
         theme="vs-dark"
         language={language}
-        value={value}
-        onChange={(v) => !readOnly && onChange?.(v ?? "")}
+        value={localValue}
+        onMount={handleEditorMount}
+        onChange={(value) => {
+          if (readOnly) return;
+          setLocalValue(value);
+        }}
         options={{
           padding: { top: 16, bottom: 16 },
           fontSize: 14,
