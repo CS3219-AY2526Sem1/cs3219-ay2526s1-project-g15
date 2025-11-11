@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     APP_NAME: str = "peerprep-user-service"
     ENV: str = "dev"
-    HOST: str = "localhost"
+    HOST: str = "54.255.202.189"
     # PORT: int = 8001 # standalone testing
     PORT: int = 8080 # when running with API gateway
 
