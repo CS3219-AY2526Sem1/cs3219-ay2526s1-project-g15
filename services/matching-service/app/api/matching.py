@@ -169,7 +169,7 @@ async def confirm_timeout_task(match_id: str, timeout_seconds: int):
             db.delete(m)
             db.commit()
 
-            # (optional) notify users over WS
+            # notify users over WS
             try:
                 await manager.send_message(m.user1_id, {"type": "match_expired", "reason": "confirmation_timeout"})
                 await manager.send_message(m.user2_id, {"type": "match_expired", "reason": "confirmation_timeout"})
@@ -370,7 +370,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
     """
     Returns the confirmation + session status of a match.
     """
-    # 1) Fetch match from DB
+    # Fetch match from DB
     match = db.query(Match).filter(Match.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -383,7 +383,7 @@ async def get_match_status(match_id: str, db: Session = Depends(get_db)):
         if not existing_session:
             session_id = None  # session not ready yet
 
-    # 2) Build base response
+    # Build base response
     status = {
         "confirm_status": match.user1_confirmed and match.user2_confirmed,
         "session_id": session_id
@@ -542,40 +542,45 @@ async def get_active_session_for_user(
         question=found_session.get("question", {}),
     )
 
-@router.post("/sessions/end")
-async def end_session(
+@router.post("/sessions/leave")
+async def leave_session(
     body: EndSessionRequest,
     user: dict = Depends(verify_token),
     db: Session = Depends(get_db),
     redis_client = Depends(get_redis_client),
 ):
-    """
-    Delete the redis collab payload so nobody can rejoin.
-    Notify both users over websocket.
-    """
     session_id = body.session_id
+    raw = await redis_client.get(session_id)
+    if not raw:
+        # session already gone, just return ok so frontend doesn't explode
+        return {"status": "ok"}
 
-    # delete collab state from redis
-    await redis_client.delete(session_id)
+    session_json = json.loads(raw)
 
-    # try to find the match that used this session id
-    match = (
-        db.query(Match)
-        .filter(Match.collaboration_session_id == session_id)
-        .first()
-    )
+    # mark that this user left
+    users = session_json.get("users", [])
+    if user["user_id"] in users:
+        users.remove(user["user_id"])
+        session_json["users"] = users
 
-    if match:
-        db.commit()
+    # keep a “left_users” list
+    left_users = session_json.get("left_users", [])
+    if user["user_id"] not in left_users:
+        left_users.append(user["user_id"])
+    session_json["left_users"] = left_users
 
+    # write back
+    await redis_client.set(session_id, json.dumps(session_json))
+
+    # notify other user(s) over websocket
+    for u in users:  # users now = remaining users
         try:
-          async with httpx.AsyncClient() as client:
-              await client.post(
-                f"http://collaboration-service:8004/api/v1/sessions/{session_id}/notify-ended",
-                json={"ended_by": user["user_id"]},
-              )
-              print(f"Notified collab-service for session {session_id}")
-        except Exception as e:
-          print(f"Failed to notify collab-service: {e}")
+            await manager.send_message(u, {
+                "type": "partner_left",
+                "session_id": session_id,
+                "user_id": user["user_id"],
+            })
+        except Exception:
+            pass
 
-    return {"status": "ended"}
+    return {"status": "left"}

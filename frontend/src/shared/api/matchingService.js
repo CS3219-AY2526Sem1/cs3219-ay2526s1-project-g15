@@ -102,15 +102,14 @@ export async function getSessionDetails(sessionId, token) {
 }
 
 /**
- * End a collaboration session
+ * Leave a collaboration session
  * @param {string} sessionId
  * @param {string} token
  */
-export async function endSession(sessionId, token) {
-  const res = await fetch(`${BASE_URL}/sessions/end`, {
+export async function leaveSession(sessionId, token) {
+  const res = await fetch(`${BASE_URL}/sessions/leave`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ session_id: sessionId }),
