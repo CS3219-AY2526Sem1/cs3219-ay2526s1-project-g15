@@ -1,123 +1,242 @@
 # Question Service
 
-Question repository and management for PeerPrep.
+The Question Service manages the question repository for PeerPrep. This guide helps developers from other services set up and test the Question Service locally.
 
-## Prerequisites
+## Overview
 
-- Python 3.8+
-- PostgreSQL database (local or remote)
-- pip package manager
+- Technology: FastAPI, SQLAlchemy, PostgreSQL
+- Port: 8003
+- Database: PostgreSQL
+- Authentication: JWT token verification via User Service
 
-## Setup Options
+## Features
 
-### Option 1: Standalone Setup
+- Question CRUD operations
+- Topic and difficulty filtering
+- Admin-only question management
+- Question seeding from LeetCode API
+- Image URL support for diagrams
+- Test cases and constraints management
 
-**1. Database Setup**
-```powershell
-# Create PostgreSQL databases
-createdb peerprep_questions_dev
-createdb peerprep_questions_dev_test
+## Project Structure
+
+```
+services/question-service/
+├── app/
+│   ├── main.py                 # FastAPI application
+│   ├── core/
+│   │   └── config.py           # Configuration settings
+│   ├── models/
+│   │   └── question.py         # Question database model
+│   ├── schemas/
+│   │   └── question.py         # Pydantic schemas
+│   ├── api/
+│   │   └── questions.py        # Question endpoints
+│   ├── services/
+│   │   └── question_service.py # Business logic
+│   └── utils/
+│       └── auth.py             # Authentication utilities
+├── scripts/
+│   ├── database_architecture_setup.py  # Create tables
+│   ├── seed_data.py                    # Seed questions
+│   └── fetch_questions.py              # Fetch from LeetCode API
+├── alembic/
+│   ├── env.py
+│   └── versions/               # Migration files
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
 ```
 
-**2. Environment Configuration**
-```powershell
-# Copy environment template
-cp .env.example .env
+## Quick Start with Docker Compose
 
-# Edit .env file with your database credentials
-# Update DATABASE_URL if using different credentials/host
-```
-
-**3. Python Dependencies**
-```powershell
-# Install required packages
-pip install -r requirements.txt
-```
-
-**4. Database Schema & Data**
-```powershell
-# Create database tables
-python scripts/database_architecture_setup.py
-
-# Seed with questions (tries API first, falls back to hardcoded)
-python scripts/seed_data.py
-```
-
-**5. Start Service**
-```powershell
-python run.py
-```
-
-### Option 2: Infrastructure Scripts
+### From Root Project
 
 ```powershell
-# From project root - sets up all services including database
-python infrastructure/scripts/setup-infrastructure.py
+# Start all services (includes question-service)
+docker compose up -d
+
+# Check question-service status
+docker compose ps question-service
+
+# View logs
+docker compose logs -f question-service
 ```
 
-## Data Population
+### Standalone Setup
 
-**Primary Seeding Script:**
 ```powershell
-# API-first seeding (10 questions from API, fallback to hardcoded)
-python scripts/seed_data.py
+# Navigate to question-service directory
+cd services/question-service
+
+# Start PostgreSQL and question-service
+docker compose up -d --build
+
+# Set up database and seed data
+docker compose exec question-service python scripts/database_architecture_setup.py
+docker compose exec question-service python scripts/seed_data.py
+
+# Verify service is running
+curl http://localhost:8003/health
 ```
-- Tries LeetCode API first for fresh questions
-- Falls back to 5 hardcoded questions if API fails
+
+## Environment Configuration
+
+Create a `.env` file in `services/question-service/`:
+
+```env
+# Application
+ENV=dev
+HOST=0.0.0.0
+PORT=8003
+
+# Database
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/peerprep_questions
+
+# External Services
+USER_SERVICE_URL=http://user-service:8001
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+```
+
+## Data Seeding
+
+### Automatic Seeding
+
+```powershell
+# Seed with 10 questions (API + fallback)
+docker compose exec question-service python scripts/seed_data.py
+```
+
+This script:
+- Attempts to fetch questions from LeetCode API
+- Falls back to hardcoded questions if API fails
 - Skips seeding if questions already exist
 
-**Alternative Scripts:**
-```powershell
-# Production API fetching (30+ questions, requires internet)
-python scripts/fetch_questions.py
+### Manual Seeding
 
-# Database setup (creates tables)
-python scripts/database_architecture_setup.py
+```powershell
+# Fetch more questions from LeetCode API
+docker compose exec question-service python scripts/fetch_questions.py
 ```
 
 ## API Endpoints
 
-**Base URL:** `http://localhost:8003`
+Base URL: `http://localhost:8003`
 
-### Question Management
-- `GET /questions/` - List questions (minimal format)
-- `GET /questions/{id}` - Get specific question with full details
-- `GET /questions/topics` - Get all topics from questions
-- `POST /questions/` - Create question (Admin only)
-- `PUT /questions/{id}` - Update question (Admin only)
-- `DELETE /questions/{id}` - Delete question (Admin only)
-- `PUT /questions/{id}/toggle-status` - Enable/disable question (Admin only)
+### Health Check
 
-### Advanced Filtering
-- `GET /questions/filter/topics-difficulty` - Filter by topics and/or difficulty (minimal format)
-  - Query Parameters:
-    - `topics` (optional): Array of topic strings (e.g., `topics=Array&topics=Hash Table`)
-    - `difficulty` (optional): Difficulty level (`easy`, `medium`, `hard`)
-  - Examples:
-    - Filter by difficulty only: `/questions/filter/topics-difficulty?difficulty=easy`
-    - Filter by topics only: `/questions/filter/topics-difficulty?topics=Array&topics=String`
-    - Combined filtering: `/questions/filter/topics-difficulty?difficulty=medium&topics=Dynamic Programming`
+```powershell
+# GET /health
+curl http://localhost:8003/health
+```
 
-### Standard Filtering (via /questions endpoint)
-- Query Parameters:
-  - `skip` - Number of items to skip (pagination)
-  - `limit` - Number of items to return (max 100)
-  - `difficulty` - Filter by difficulty level
-  - `topics` - Filter by topics (comma-separated)
-  - `search` - Search in title and description
+### Question Endpoints
 
-### Topics
-- `GET /questions/topics` - Get all topics
-  - Returns: Sorted array of unique topic strings from all questions
-  - Permissions: Public endpoint (admins see topics from inactive questions too)
-  - Example Response: `["Array", "Binary Search", "Dynamic Programming", "Hash Table", "String"]`
+**GET /questions/**
 
-**Interactive Documentation:** http://localhost:8003/docs
+List all questions with minimal details (id, title, difficulty, topics, is_active).
 
-## Question JSON Format
+```powershell
+curl http://localhost:8003/questions/
+```
 
-### Minimal Question Response Format (Lists & Filters)
-For performance, list endpoints and filters return only essential fields:
+Query parameters:
+- `skip`: Number of items to skip (pagination)
+- `limit`: Number of items to return (max 100)
+- `difficulty`: Filter by difficulty (easy, medium, hard)
+- `topics`: Filter by topics (comma-separated)
+- `search`: Search in title and description
+
+**GET /questions/{id}**
+
+Get full question details including examples, constraints, and test cases.
+
+```powershell
+curl http://localhost:8003/questions/1
+```
+
+**GET /questions/topics**
+
+Get all available topics.
+
+```powershell
+curl http://localhost:8003/questions/topics
+```
+
+Returns sorted array of unique topic strings.
+
+**GET /questions/filter/topics-difficulty**
+
+Advanced filtering by topics and difficulty.
+
+```powershell
+# Filter by difficulty
+curl "http://localhost:8003/questions/filter/topics-difficulty?difficulty=easy"
+
+# Filter by topics
+curl "http://localhost:8003/questions/filter/topics-difficulty?topics=Array&topics=String"
+
+# Combined filtering
+curl "http://localhost:8003/questions/filter/topics-difficulty?difficulty=medium&topics=Dynamic%20Programming"
+```
+
+**POST /questions/** (Admin only)
+
+Create a new question.
+
+```powershell
+curl -X POST http://localhost:8003/questions/ `
+  -H "Authorization: Bearer <admin_token>" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "title": "Two Sum",
+    "description": "Given an array of integers...",
+    "difficulty": "easy",
+    "topics": ["Array", "Hash Table"],
+    "examples": [],
+    "test_cases": [],
+    "is_active": true
+  }'
+```
+
+**PUT /questions/{id}** (Admin only)
+
+Update an existing question.
+
+```powershell
+curl -X PUT http://localhost:8003/questions/1 `
+  -H "Authorization: Bearer <admin_token>" `
+  -H "Content-Type: application/json" `
+  -d '{"title": "Updated Title"}'
+```
+
+**DELETE /questions/{id}** (Admin only)
+
+Delete a question.
+
+```powershell
+curl -X DELETE http://localhost:8003/questions/1 `
+  -H "Authorization: Bearer <admin_token>"
+```
+
+**PUT /questions/{id}/toggle-status** (Admin only)
+
+Toggle question active status.
+
+```powershell
+curl -X PUT http://localhost:8003/questions/1/toggle-status `
+  -H "Authorization: Bearer <admin_token>"
+```
+
+## Response Formats
+
+### Minimal Response (List Operations)
+
+Used by list and filter endpoints for performance:
+
 ```json
 {
   "id": 1,
@@ -128,42 +247,13 @@ For performance, list endpoints and filters return only essential fields:
 }
 ```
 
-**Used by:**
-- `GET /questions/` (question lists)
-- `GET /questions/filter/topics-difficulty` (filtered results)
+### Full Response (Single Question)
 
-### Full Question Response Format (Individual Questions)
+Used when fetching individual questions:
+
 ```json
 {
   "id": 1,
-  "title": "Two Sum",
-  "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-  "difficulty": "easy",
-  "topics": ["Array", "Hash Table"],
-  "examples": [
-    {
-      "input": "[2,7,11,15], target = 9",
-      "output": "[0,1]",
-      "explanation": "Because nums[0] + nums[1] == 9, we return [0, 1]."
-    }
-  ],
-  "constraints": "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9\nOnly one valid answer exists.",
-  "test_cases": [
-    {
-      "input": {"nums": [2, 7, 11, 15], "target": 9},
-      "output": [0, 1]
-    }
-  ],
-  "images": ["https://example.com/diagram.png"],
-  "is_active": true,
-  "created_at": "2025-10-16T07:00:00Z",
-  "updated_at": "2025-10-16T07:00:00Z"
-}
-```
-
-### Question Creation Format (POST)
-```json
-{
   "title": "Two Sum",
   "description": "Given an array of integers nums and an integer target...",
   "difficulty": "easy",
@@ -183,77 +273,162 @@ For performance, list endpoints and filters return only essential fields:
     }
   ],
   "images": ["https://example.com/diagram.png"],
-  "is_active": true
+  "is_active": true,
+  "created_at": "2025-10-16T07:00:00Z",
+  "updated_at": "2025-10-16T07:00:00Z"
 }
 ```
 
-### Field Descriptions
-- **`id`**: Unique identifier (auto-generated)
-- **`title`**: Question title (1-255 characters)
-- **`description`**: Question description (can be empty string)
-- **`difficulty`**: Difficulty level (`"easy"`, `"medium"`, `"hard"`)
-- **`topics`**: Array of topic strings (at least 1 required)
-- **`examples`**: Array of example objects with input, output, and explanation
-- **`constraints`**: Optional constraints text
-- **`test_cases`**: Array of test case objects for validation
-- **`images`**: Optional array of image URLs (JPEG, PNG, SVG only)
-- **`is_active`**: Boolean flag for question visibility
-- **`created_at`**: Timestamp when question was created (response only)
-- **`updated_at`**: Timestamp when question was last modified (response only)
+## Integration with Other Services
 
-## Development
+### From Matching Service
 
-**Database Migrations:**
-```powershell
-alembic upgrade head
+The Matching Service fetches a random question for matched users:
+
+```python
+import httpx
+
+async def get_random_question(difficulty: str, topic: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"http://question-service:8003/questions/filter/topics-difficulty",
+            params={"difficulty": difficulty, "topics": topic}
+        )
+        questions = response.json()
+        return random.choice(questions) if questions else None
 ```
 
-**Testing:**
-```powershell
-pytest test_service.py -v
+### Authentication
+
+Admin endpoints require JWT token from User Service:
+
+```
+Authorization: Bearer <access_token>
 ```
 
-**Environment Variables:**
-- `DATABASE_URL` - PostgreSQL connection string
-- `USER_SERVICE_URL` - User service API URL for auth calls (default: http://localhost:8001)
-- `ENV` - Environment (dev/staging/prod)
-- `PORT` - Service port (default: 8003)
+The service verifies tokens by calling the User Service `/users/me` endpoint.
 
-**Package Notes:**
-- Uses `psycopg[binary]` (psycopg3) instead of psycopg2-binary for better Windows compatibility
-- All tests should pass with proper database connection
-- Authentication currently uses placeholder functions - ready for User Service integration
+## Database Management
 
-**Testing the API:**
+### Running Migrations
+
 ```powershell
-# Test basic questions list
-Invoke-WebRequest -Uri "http://localhost:8003/questions" -Method GET
+# Apply all pending migrations
+docker compose exec question-service alembic upgrade head
 
-# Test new filtering endpoint
-Invoke-WebRequest -Uri "http://localhost:8003/questions/filter/topics-difficulty?difficulty=easy&topics=Array" -Method GET
+# View migration history
+docker compose exec question-service alembic history
+
+# Rollback one migration
+docker compose exec question-service alembic downgrade -1
 ```
+
+### Direct Database Access
+
+```powershell
+# Connect to PostgreSQL
+docker compose exec postgres psql -U postgres -d peerprep_questions
+
+# List questions
+SELECT id, title, difficulty FROM questions;
+
+# Count questions by difficulty
+SELECT difficulty, COUNT(*) FROM questions GROUP BY difficulty;
+
+# Exit
+\q
+```
+
+## Common Docker Commands
+
+```powershell
+# View service logs
+docker compose logs -f question-service
+
+# Access service shell
+docker compose exec question-service sh
+
+# Restart service
+docker compose restart question-service
+
+# Rebuild service
+docker compose build question-service
+docker compose up -d question-service
+```
+
+## API Documentation
+
+Interactive API documentation is available when the service is running:
+
+- Swagger UI: http://localhost:8003/docs
+- ReDoc: http://localhost:8003/redoc
 
 ## Troubleshooting
 
-**Database Connection Issues:**
-- Verify PostgreSQL is running
-- Check DATABASE_URL in .env file
-- Ensure database exists
+### Database Connection Issues
 
-**Import Errors:**
-- Run `pip install -r requirements.txt`
-- Check Python version (3.8+ required)
+```powershell
+# Check if PostgreSQL is running
+docker compose ps postgres
 
-**Port Conflicts:**
-- Change PORT in .env file
-- Kill existing processes on port 8003
+# View PostgreSQL logs
+docker compose logs postgres
 
-**Seeding Failures:**
-- API timeouts will automatically fallback to hardcoded questions (5 questions)
-- Check internet connection for API-based seeding (10 questions)
-- Verify database connection before seeding
-- Script skips seeding if questions already exist
+# Test connection
+docker compose exec postgres pg_isready -U postgres
+```
 
-**psycopg2 Installation Issues:**
-- Use `pip install "psycopg[binary]"` instead of psycopg2-binary
-- psycopg3 provides better Windows compatibility without requiring PostgreSQL dev tools
+### Seeding Failures
+
+```powershell
+# View seeding logs
+docker compose logs question-service
+
+# Manually create tables
+docker compose exec question-service python scripts/database_architecture_setup.py
+
+# Re-run seeding
+docker compose exec question-service python scripts/seed_data.py
+```
+
+### Port Conflicts
+
+If port 8003 is already in use:
+
+```powershell
+# Check what's using the port
+netstat -ano | findstr :8003
+
+# Change PORT in .env or stop conflicting process
+```
+
+### Authentication Issues
+
+If admin endpoints fail:
+
+- Ensure User Service is running and accessible
+- Verify JWT token is valid and not expired
+- Check USER_SERVICE_URL configuration
+- Confirm user has admin role
+
+## Local Development Without Docker
+
+```powershell
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up local PostgreSQL and update DATABASE_URL in .env
+
+# Create tables
+python scripts/database_architecture_setup.py
+
+# Seed data
+python scripts/seed_data.py
+
+# Start service
+uvicorn app.main:app --reload --port 8003
+```
