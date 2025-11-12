@@ -1,363 +1,552 @@
-# User Service
+# PeerPrep - User Service (FastAPI + SQLAlchemy)
 
-The User Service handles authentication, authorization, and user profile management for PeerPrep. This guide helps developers from other services set up and test the User Service locally.
+A comprehensive microservice managing user authentication, profiles, and coding attempt tracking for the PeerPrep platform. Built with **FastAPI**, **SQLAlchemy (async)**, **Alembic** for migrations, and **PostgreSQL**. Fully containerized via **Docker Compose**.
 
-## Overview
+> **Prerequisite:** Install **Docker Desktop** (Windows/macOS) or Docker Engine (Linux). Ensure `docker compose` works from your terminal.
 
-- Technology: FastAPI, SQLAlchemy (async), PostgreSQL
-- Port: 8001
-- Authentication: JWT access and refresh tokens
-- Database: PostgreSQL (async with asyncpg driver)
+---
 
-## Features
+## 🧩 Features
 
-- User registration and login
-- JWT-based authentication
-- Role-based access control (User/Admin)
-- Password hashing and account security
-- Alembic database migrations
+### Authentication & User Management
+- User registration with email verification
+- Login with JWT access + refresh tokens
+- Password reset via email with 6-digit verification codes
+- Account locking after failed login attempts (3 attempts = 15 min lock)
+- Email verification system
+- Token refresh mechanism
+- Secure password hashing with Argon2
+- Role-based access control (USER/ADMIN)
+
+### Attempt Tracking System
+- Record coding attempts with test results
+- Track solved questions per user
+- Question-level best performance tracking
+- Attempt history with pagination
+- Summary statistics (total attempts, solved count, last attempt)
+
+### Security Features
+- JWT-based authentication (access + refresh tokens)
+- Failed login attempt tracking
+- Temporary account locking
+- Password reset with time-limited codes
+- Email verification required for login
+
+### API Features
+- RESTful endpoints for all operations
+- Async database operations
 - OpenAPI documentation at `/docs`
+- Health check endpoints
 
-## Project Structure
+---
+
+## 🗂️ Project Structure
 
 ```
 services/user-service/
-├── app/
-│   ├── main.py                 # FastAPI application
-│   ├── core/
-│   │   ├── config.py           # Configuration settings
-│   │   └── security.py         # JWT and password utilities
-│   ├── db/
-│   │   └── session.py          # Database session management
-│   ├── models/
-│   │   ├── user.py             # User model
-│   │   └── refresh_token.py    # Refresh token model
-│   └── api/
-│       ├── auth.py             # Authentication endpoints
-│       └── users.py            # User management endpoints
-├── alembic/
-│   ├── env.py                  # Alembic configuration
-│   └── versions/               # Migration files
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── .env.example
+  ├── app/
+  │   ├── main.py                     # FastAPI app, router mounting
+  │   ├── core/
+  │   │   ├── config.py               # Pydantic settings (loads env)
+  │   │   ├── security.py             # JWT helpers, hashing
+  │   │   └── email.py                # Email sending utilities
+  │   ├── db/
+  │   │   ├── session.py              # Async engine & session factory
+  │   │   └── init_db.py              # DB initialization
+  │   ├── models/
+  │   │   ├── user.py                 # User model with relationships
+  │   │   ├── refresh_token.py        # RefreshToken model
+  │   │   ├── password_reset.py       # PasswordReset model
+  │   │   └── attempt.py              # Attempt & UserQuestionStatus models
+  │   ├── routers/
+  │   │   ├── auth.py                 # /auth endpoints (register, login, etc.)
+  │   │   ├── users.py                # /users endpoints (profile, admin check)
+  │   │   ├── attempts.py             # /attempts endpoints (tracking)
+  │   │   └── home.py                 # /home endpoint
+  │   └── schemas/
+  │       ├── auth.py                 # Auth request/response models
+  │       ├── user.py                 # User schemas
+  │       └── attempt.py              # Attempt schemas
+  ├── alembic/
+  │   ├── env.py                      # Alembic environment config
+  │   └── versions/                   # Migration files
+  ├── Dockerfile
+  ├── docker-compose.yml
+  ├── requirements.txt
+  └── .env.example
 ```
 
-## Quick Start with Docker Compose
+---
 
-### From Root Project
+## ⚙️ Configuration
 
-If running from the root project directory:
+Create a `.env` file (copy from `.env.example`) in `services/user-service/`:
 
-```powershell
-# Start all services (includes user-service)
-docker compose up -d
-
-# Check user-service status
-docker compose ps user-service
-
-# View logs
-docker compose logs -f user-service
-```
-
-### Standalone Setup
-
-To run the user-service independently:
-
-```powershell
-# Navigate to user-service directory
-cd services/user-service
-
-# Start PostgreSQL and user-service
-docker compose up -d --build
-
-# Run database migrations
-docker compose exec user-service alembic upgrade head
-
-# Verify service is running
-curl http://localhost:8001/healthz
-```
-
-## Environment Configuration
-
-Create a `.env` file in `services/user-service/`:
-
-```env
-# Application
+```dotenv
+# App Configuration
 APP_NAME=peerprep-user-service
 ENV=dev
 HOST=0.0.0.0
 PORT=8001
 
-# Database
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/peerprep_users
+# Database (asyncpg for async operations)
+DATABASE_URL=postgresql+asyncpg://peerprep_user:admin@postgres:5432/peerprep_users
 
 # JWT Configuration
-SECRET=your_secret_key_here
+SECRET_KEY=your-secret-key-change-in-production
 ALGORITHM=HS256
 ACCESS_TTL_MIN=15
 REFRESH_TTL_DAYS=7
+
+# Email Configuration (Gmail SMTP)
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_FROM=your-email@gmail.com
+MAIL_FROM_NAME=PeerPrep
+MAIL_PORT=465
+MAIL_SERVER=smtp.gmail.com
+MAIL_STARTTLS=false
+MAIL_SSL_TLS=true
+USE_CREDENTIALS=true
+VALIDATE_CERTS=true
+
+# Public URL (for email verification links)
+PUBLIC_BASE_URL=http://localhost:8080
 
 # Optional
 LOG_LEVEL=INFO
 ```
 
-Note: Alembic automatically converts `postgresql+asyncpg://` to `postgresql://` for migrations.
+> **Note:** For Gmail, you need to generate an **App Password** from your Google Account settings.
 
-## API Endpoints
+---
 
-Base URL: `http://localhost:8001`
+## 🚀 Run with Docker (Recommended)
 
-### Health Check
+### 1. Start All Services
 
-```powershell
-# GET /healthz
+```bash
+# From project root
+docker compose up -d --build
+```
+
+This launches:
+- `postgres` on port **5432** with DB `peerprep_users`
+- `user-service` on port **8001**
+- `redis` on port **6379**
+- `rabbitmq` on ports **5672** (AMQP) and **15672** (Management UI)
+
+### 2. Run Database Migrations
+
+```bash
+docker compose exec user-service alembic upgrade head
+```
+
+### 3. Verify Service is Running
+
+```bash
 curl http://localhost:8001/healthz
+# {"ok": true}
 ```
 
-### Authentication Endpoints
+Open API docs: [http://localhost:8001/docs](http://localhost:8001/docs)
 
-**POST /auth/register**
+---
 
-Register a new user.
+## 🧪 API Endpoints
 
-```powershell
-curl -X POST http://localhost:8001/auth/register `
-  -H "Content-Type: application/json" `
-  -d '{"email":"test@example.com","password":"SecurePass123","name":"Test User"}'
+### Authentication (`/auth`)
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/auth/register` | Register new user | No |
+| POST | `/auth/login` | Login with credentials | No |
+| POST | `/auth/logout` | Logout and invalidate tokens | Yes |
+| POST | `/auth/refresh` | Refresh access token | No (refresh token) |
+| POST | `/auth/forgot-password` | Request password reset code | No |
+| POST | `/auth/verify-reset-code` | Verify reset code validity | No |
+| POST | `/auth/reset-password` | Reset password with code | No |
+| POST | `/auth/verify-password` | Verify user's current password | Yes |
+| GET | `/auth/verify-email` | Verify email with token | No |
+
+### User Management (`/users`)
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/users/me` | Get current user profile | Yes |
+| PUT | `/users/me` | Update profile (name, password) | Yes |
+| DELETE | `/users/me` | Delete user account | Yes |
+| GET | `/users/is-admin` | Check if user is admin | Yes |
+
+### Attempt Tracking (`/api/v1/attempts`)
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/api/v1/attempts/` | Submit coding attempt | Yes |
+| GET | `/api/v1/attempts/me` | Get user's attempt history | Yes |
+| GET | `/api/v1/attempts/me/summary` | Get attempt statistics | Yes |
+| GET | `/api/v1/attempts/{attempt_id}` | Get specific attempt details | Yes |
+
+### Health Checks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/healthz` | Basic health check |
+| GET | `/readyz` | Database readiness check |
+
+---
+
+## 📝 API Usage Examples
+
+### Register New User
+
+```bash
+curl -X POST http://localhost:8001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "alice@example.com",
+    "password": "SecurePass123!",
+    "name": "Alice"
+  }'
 ```
 
-Response includes `access_token`, `refresh_token`, and user details.
-
-**POST /auth/login**
-
-Login an existing user.
-
-```powershell
-curl -X POST http://localhost:8001/auth/login `
-  -H "Content-Type: application/json" `
-  -d '{"email":"test@example.com","password":"SecurePass123"}'
+**Response:**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "refresh_token_id": "uuid-string"
+}
 ```
 
-Returns access and refresh tokens.
+### Verify Email
 
-**POST /auth/refresh**
+User clicks link in email: `http://localhost:8080/verify-email?token=...`
 
-Refresh an access token.
+### Login
 
-```powershell
-curl -X POST http://localhost:8001/auth/refresh `
-  -H "Content-Type: application/json" `
-  -d '{"refresh_token":"<your_refresh_token>"}'
+```bash
+curl -X POST http://localhost:8001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "alice@example.com",
+    "password": "SecurePass123!"
+  }'
 ```
 
-### User Endpoints
+### Get Current User
 
-**GET /users/me**
-
-Get current user profile (requires authentication).
-
-```powershell
-curl http://localhost:8001/users/me `
+```bash
+curl http://localhost:8001/users/me \
   -H "Authorization: Bearer <access_token>"
 ```
 
-**PATCH /users/me**
-
-Update current user profile.
-
-```powershell
-curl -X PATCH http://localhost:8001/users/me `
-  -H "Authorization: Bearer <access_token>" `
-  -H "Content-Type: application/json" `
-  -d '{"name":"Updated Name"}'
+**Response:**
+```json
+{
+  "id": "uuid",
+  "email": "alice@example.com",
+  "name": "Alice",
+  "role": "USER"
+}
 ```
 
-## Integration with Other Services
+### Submit Coding Attempt
 
-### Token Verification
-
-Other services can verify JWT tokens using the shared secret:
-
-```python
-from jose import jwt
-
-# Decode and verify token
-payload = jwt.decode(
-    token,
-    secret_key,
-    algorithms=["HS256"]
-)
-user_id = payload.get("sub")
+```bash
+curl -X POST http://localhost:8001/api/v1/attempts/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question_id": 1,
+    "language": "python",
+    "submitted_code": "def solution(nums): return sum(nums)",
+    "passed_tests": 8,
+    "total_tests": 10
+  }'
 ```
 
-### Required Headers
+### Get Attempt History
 
-When calling protected endpoints from other services:
-
-```
-Authorization: Bearer <access_token>
-```
-
-## Database Management
-
-### Running Migrations
-
-```powershell
-# Apply all pending migrations
-docker compose exec user-service alembic upgrade head
-
-# View migration history
-docker compose exec user-service alembic history
-
-# Rollback one migration
-docker compose exec user-service alembic downgrade -1
+```bash
+curl http://localhost:8001/api/v1/attempts/me?limit=20&offset=0 \
+  -H "Authorization: Bearer <access_token>"
 ```
 
-### Creating New Migrations
+### Password Reset Flow
 
-After modifying models:
-
-```powershell
-# Auto-generate migration
-docker compose exec user-service alembic revision --autogenerate -m "description"
-
-# Apply new migration
-docker compose exec user-service alembic upgrade head
+**1. Request Reset Code:**
+```bash
+curl -X POST http://localhost:8001/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com"}'
 ```
 
-### Direct Database Access
-
-```powershell
-# Connect to PostgreSQL
-docker compose exec postgres psql -U postgres -d peerprep_users
-
-# List tables
-\dt
-
-# Query users
-SELECT id, email, name, role FROM users;
-
-# Exit
-\q
+**2. Verify Code:**
+```bash
+curl -X POST http://localhost:8001/auth/verify-reset-code \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "alice@example.com",
+    "code": "123456"
+  }'
 ```
 
-## Common Docker Commands
-
-```powershell
-# View service logs
-docker compose logs -f user-service
-
-# Access service shell
-docker compose exec user-service sh
-
-# Restart service
-docker compose restart user-service
-
-# Rebuild service
-docker compose build user-service
-docker compose up -d user-service
+**3. Reset Password:**
+```bash
+curl -X POST http://localhost:8001/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "alice@example.com",
+    "code": "123456",
+    "new_password": "NewSecurePass123!"
+  }'
 ```
 
-## API Documentation
+---
 
-Interactive API documentation is available when the service is running:
+## 🏗️ Local Development (Without Docker)
 
-- Swagger UI: http://localhost:8001/docs
-- ReDoc: http://localhost:8001/redoc
+> Only if you have Python 3.11+ & PostgreSQL installed locally.
 
-## Authentication Model
-
-### Access Tokens
-- Short-lived (default: 15 minutes)
-- Used for API authentication
-- Passed in Authorization header
-
-### Refresh Tokens
-- Long-lived (default: 7 days)
-- Stored in database per device/session
-- Used to obtain new access tokens
-
-### Password Security
-- Passwords are hashed using argon2
-- Account lockout after failed attempts
-- `failed_attempts` and `locked_until` fields for security
-
-## Troubleshooting
-
-### Database Connection Issues
-
-```powershell
-# Check if PostgreSQL is running
-docker compose ps postgres
-
-# View PostgreSQL logs
-docker compose logs postgres
-
-# Test connection
-docker compose exec postgres pg_isready -U postgres
-```
-
-### Migration Errors
-
-If you encounter migration issues:
-
-```powershell
-# Check current migration version
-docker compose exec user-service alembic current
-
-# View pending migrations
-docker compose exec user-service alembic heads
-
-# Force revision (use cautiously)
-docker compose exec user-service alembic stamp head
-```
-
-### Port Conflicts
-
-If port 8001 is already in use:
-
-```powershell
-# Check what's using the port
-netstat -ano | findstr :8001
-
-# Either stop the conflicting process or change PORT in .env
-```
-
-### Service Won't Start
-
-```powershell
-# Check for errors in logs
-docker compose logs user-service
-
-# Ensure database is ready
-docker compose ps postgres
-
-# Rebuild from scratch
-docker compose down
-docker compose up --build
-```
-
-## Local Development Without Docker
-
-If you prefer to run locally without Docker:
-
-```powershell
+```bash
 # Create virtual environment
-python -m venv venv
-.\venv\Scripts\Activate
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Set up local PostgreSQL and update DATABASE_URL in .env
+# Set DATABASE_URL to point at your local Postgres
+export DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/peerprep_users"
 
 # Run migrations
 alembic upgrade head
 
-# Start service
+# Start server
 uvicorn app.main:app --reload --port 8001
 ```
 
-Note: You'll need PostgreSQL installed and running locally with a database created.
+---
+
+## 🛤️ Database Migrations (Alembic)
+
+### View Migration History
+```bash
+docker compose exec user-service alembic history --verbose
+```
+
+### Create New Migration (After Model Changes)
+```bash
+docker compose exec user-service alembic revision -m "description" --autogenerate
+```
+
+### Apply Migrations
+```bash
+docker compose exec user-service alembic upgrade head
+```
+
+### Rollback One Migration
+```bash
+docker compose exec user-service alembic downgrade -1
+```
+
+### Current Migration State
+```bash
+docker compose exec user-service alembic current
+```
+
+---
+
+## 📊 Database Schema
+
+### Users Table
+- `id` (String, PK)
+- `email` (String, unique)
+- `password_hash` (String)
+- `name` (String, nullable)
+- `role` (String, default: "USER")
+- `is_verified` (Boolean, default: false)
+- `failed_attempts` (Integer, default: 0)
+- `locked_until` (DateTime, nullable)
+- `created_at` (DateTime)
+- `updated_at` (DateTime)
+
+### Refresh Tokens Table
+- `id` (String, PK)
+- `user_id` (String, FK → users)
+- `hashed` (String)
+- `user_agent` (String, nullable)
+- `ip` (String, nullable)
+- `created_at` (DateTime)
+- `revoked_at` (DateTime, nullable)
+- `expires_at` (DateTime)
+
+### Password Resets Table
+- `id` (String, PK)
+- `user_id` (String, FK → users)
+- `code_hash` (String)
+- `expires_at` (DateTime)
+- `used_at` (DateTime, nullable)
+- `created_at` (DateTime)
+
+### Attempts Table
+- `id` (String, PK)
+- `user_id` (String, FK → users)
+- `question_id` (Integer)
+- `language` (String)
+- `submitted_code` (Text)
+- `passed_tests` (SmallInteger)
+- `total_tests` (SmallInteger)
+- `created_at` (DateTime)
+
+### User Question Status Table
+- `user_id` (String, PK, FK → users)
+- `question_id` (Integer, PK)
+- `best_runtime_ms` (Integer, nullable)
+- `solved_at` (DateTime, nullable)
+
+---
+
+## 🔐 Security Features
+
+### Account Protection
+- **Failed Login Tracking**: Increments on wrong password
+- **Account Locking**: Locks for 15 minutes after 3 failed attempts
+- **Email Alerts**: Console log for suspicious login attempts
+- **Automatic Unlock**: Lock expires automatically
+
+### Password Security
+- **Argon2 Hashing**: Industry-standard password hashing
+- **Minimum Length**: 8 characters enforced
+- **Reset Codes**: 6-digit numeric codes, expire in 10 minutes
+- **One-Time Use**: Reset codes invalidated after use
+
+### Token Management
+- **Access Tokens**: Short-lived (15 minutes)
+- **Refresh Tokens**: Long-lived (7 days), stored in database
+- **Device Tracking**: Stores user-agent and IP for each token
+- **Global Logout**: Revokes all refresh tokens for user
+
+---
+
+## 📦 Common Docker Commands
+
+```bash
+# View logs
+docker compose logs -f user-service
+
+# Open shell in container
+docker compose exec user-service sh
+
+# Connect to PostgreSQL
+docker compose exec postgres psql -U postgres -d peerprep_users
+
+# PostgreSQL commands
+\dt                           # List tables
+\d users                      # Describe users table
+SELECT * FROM users LIMIT 5;  # Query users
+SELECT * FROM attempts WHERE user_id = 'uuid';  # Query attempts
+
+# Restart service
+docker compose restart user-service
+
+# Rebuild after code changes
+docker compose up -d --build user-service
+```
+
+---
+
+## 🧰 Troubleshooting
+
+### Docker Issues
+- **`docker: command not found`** → Install Docker Desktop, restart terminal
+- **Port conflicts** → Change PORT in `.env` or stop conflicting services
+- **Container won't start** → Check logs with `docker compose logs user-service`
+
+### Database Issues
+- **Connection refused** → Verify PostgreSQL is running and DATABASE_URL is correct
+- **Migration errors** → Check migration files have correct revision chain
+- **Table not found** → Run `alembic upgrade head`
+
+### Email Issues
+- **Email not sending** → Verify Gmail App Password is correct
+- **SMTP connection failed** → Check MAIL_PORT, MAIL_SERVER settings
+- **Emails going to spam** → Gmail may flag test emails
+
+### Authentication Issues
+- **Token expired** → Use refresh token to get new access token
+- **Invalid token** → Check SECRET_KEY matches between services
+- **Email not verified** → User must click verification link before login
+
+---
+
+## 🔄 Integration with Other Services
+
+### API Gateway (Nginx)
+Routes `/api/v1/users` and `/auth` to this service on port 8001.
+
+### Matching Service
+Calls `/users/me` to verify user authentication when creating match requests.
+
+### Question Service
+Calls `/users/is-admin` to verify admin privileges for question management.
+
+### Collaboration Service
+Uses JWT tokens to authenticate WebSocket connections.
+
+---
+
+## 📚 Dependencies
+
+```txt
+fastapi              # Web framework
+uvicorn              # ASGI server
+SQLAlchemy           # ORM
+asyncpg              # Async PostgreSQL driver
+alembic              # Database migrations
+pydantic             # Data validation
+pydantic-settings    # Settings management
+passlib              # Password hashing
+argon2-cffi          # Argon2 implementation
+python-jose          # JWT handling
+email-validator      # Email validation
+psycopg2-binary      # PostgreSQL adapter
+fastapi-mail         # Email sending
+```
+
+---
+
+## 🚀 Production Considerations
+
+1. **Environment Variables**: Use secrets manager (AWS Secrets Manager, etc.)
+2. **Database**: Use managed PostgreSQL (AWS RDS, Google Cloud SQL)
+3. **Email**: Consider transactional email service (SendGrid, AWS SES)
+4. **Logging**: Implement structured logging (JSON format)
+5. **Monitoring**: Set up APM (Datadog, New Relic)
+6. **Rate Limiting**: Add rate limiting middleware
+7. **HTTPS**: Configure SSL/TLS certificates
+8. **Backup**: Regular database backups
+9. **Secrets**: Rotate JWT secrets periodically
+10. **Scaling**: Use horizontal scaling with load balancer
+
+---
+
+## 👥 Contributors
+
+**CS3219 AY2526S1 - Group G15**
+- User Service development and authentication system
+- Attempt tracking and history features
+- Email verification and password reset flows
+
+---
+
+## 📞 Support
+
+For issues or questions:
+- Check service logs: `docker compose logs -f user-service`
+- Review API documentation: http://localhost:8001/docs
+- Verify database state: Connect via psql
+- Test endpoints: Use Postman or curl
+
+---
