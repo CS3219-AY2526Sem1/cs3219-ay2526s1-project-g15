@@ -410,3 +410,15 @@ docker compose up --build
 - [services/matching-service/README.md](services/matching-service/README.md) - Real-time matching service
 - [services/collaboration-service/README.md](services/collaboration-service/README.md) - Real-time collaboration service
 
+## AI Use Summary
+Tools: ChatGPT (GPT‑5 Thinking), GitHub Copilot
+
+In general, AI tools were used it to: 
+- Generate boilerplate for Nginx gateway.
+- Debug certain programming errors.
+- Suggest implementation approaches for new technologies and certain functions.
+- Answer queries about new technologies.
+
+All AI outputs were reviewed, edited, and tested by the authors.
+
+
