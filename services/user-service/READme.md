@@ -280,7 +280,7 @@ Interactive API documentation is available when the service is running:
 - Used to obtain new access tokens
 
 ### Password Security
-- Passwords are hashed using bcrypt
+- Passwords are hashed using argon2
 - Account lockout after failed attempts
 - `failed_attempts` and `locked_until` fields for security
 
