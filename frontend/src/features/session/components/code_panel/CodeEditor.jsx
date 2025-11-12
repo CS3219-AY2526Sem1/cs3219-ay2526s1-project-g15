@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 
 const LABELS = {
@@ -39,10 +39,80 @@ export default function CodeEditor({
 }) {
   const [localRunning, setLocalRunning] = useState(false);
   const [localSubmitting, setLocalSubmitting] = useState(false);
+  
+  // Refs for collaborative editing
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const isLocalChangeRef = useRef(false);
+  const cursorPositionRef = useRef(null);
 
   const isRunningNow = isRunning || localRunning;
   const isSubmittingNow = localSubmitting;
   const busy = isRunningNow || isSubmittingNow;
+
+  // Handle editor mount
+  const handleEditorDidMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Track cursor position changes
+    editor.onDidChangeCursorPosition((e) => {
+      cursorPositionRef.current = e.position;
+    });
+  }, []);
+
+  // Handle local changes with cursor preservation
+  const handleEditorChange = useCallback((newValue) => {
+    if (readOnly) return;
+    
+    // Mark as a local change
+    isLocalChangeRef.current = true;
+    
+    // Save cursor position before change
+    if (editorRef.current) {
+      cursorPositionRef.current = editorRef.current.getPosition();
+    }
+    
+    onChange?.(newValue ?? "");
+    
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isLocalChangeRef.current = false;
+    }, 50);
+  }, [onChange, readOnly]);
+
+  // Restore cursor position when value changes from remote
+  useEffect(() => {
+    if (!editorRef.current || !cursorPositionRef.current) return;
+    if (isLocalChangeRef.current) return; // Don't restore for local changes
+    
+    // Restore cursor position after remote update
+    const editor = editorRef.current;
+    const savedPosition = cursorPositionRef.current;
+    
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+      try {
+        // Validate position is still valid in the document
+        const model = editor.getModel();
+        if (model) {
+          const lineCount = model.getLineCount();
+          const lineLength = model.getLineMaxColumn(Math.min(savedPosition.lineNumber, lineCount));
+          
+          // Clamp position to valid range
+          const safePosition = {
+            lineNumber: Math.min(savedPosition.lineNumber, lineCount),
+            column: Math.min(savedPosition.column, lineLength)
+          };
+          
+          editor.setPosition(safePosition);
+          editor.revealPositionInCenter(safePosition);
+        }
+      } catch (err) {
+        console.warn("Could not restore cursor position:", err);
+      }
+    });
+  }, [value]);
 
   const handleRun = useCallback(async () => {
     if (readOnly) return;
@@ -187,7 +257,8 @@ export default function CodeEditor({
         theme="vs-dark"
         language={language}
         value={value}
-        onChange={(v) => !readOnly && onChange?.(v ?? "")}
+        onChange={handleEditorChange}
+        onMount={handleEditorDidMount}
         options={{
           padding: { top: 16, bottom: 16 },
           fontSize: 14,
@@ -196,6 +267,10 @@ export default function CodeEditor({
           automaticLayout: true,
           smoothScrolling: true,
           readOnly,
+          quickSuggestions: !readOnly,
+          suggest: {
+            enabled: !readOnly
+          },
         }}
       />
     </div>
