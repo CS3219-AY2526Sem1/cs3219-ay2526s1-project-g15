@@ -4,8 +4,7 @@ import useCollaborationSocket from "./useCollaborationSocket";
 export default function useCollaborativeSession(sessionId, userId, username) {
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
-  const [chatMessages, setChatMessages] = useState([]);
-  
+
   // Tracks if we're currently typing to avoid overwriting our own changes
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
@@ -21,7 +20,6 @@ export default function useCollaborativeSession(sessionId, userId, username) {
 
     // Only update code if we're not actively typing
     if (sessionState.code !== undefined && sessionState.code !== lastSentCodeRef.current) {
-      // If we're typing, delay the update
       if (isTypingRef.current) {
         pendingUpdateRef.current = sessionState.code;
       } else {
@@ -29,34 +27,20 @@ export default function useCollaborativeSession(sessionId, userId, username) {
         lastSentCodeRef.current = sessionState.code;
       }
     }
-
-    if (sessionState.language) {
-      setLanguage((prev) =>
-        prev !== sessionState.language ? sessionState.language : prev
-      );
-    }
-
-    if (sessionState.chat) {
-      setChatMessages(sessionState.chat);
-    }
   }, [sessionState]);
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
-    
-    // Mark as typing
+
     isTypingRef.current = true;
-    
-    // Clear existing timeout
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
-    // Set typing to false after user stops typing
+
     typingTimeoutRef.current = setTimeout(() => {
       isTypingRef.current = false;
-      
-      // Apply any pending updates after we stop typing
+
       if (pendingUpdateRef.current && pendingUpdateRef.current !== newCode) {
         setCode(pendingUpdateRef.current);
         lastSentCodeRef.current = pendingUpdateRef.current;
@@ -68,15 +52,13 @@ export default function useCollaborativeSession(sessionId, userId, username) {
   // Broadcast code updates
   useEffect(() => {
     if (!socketReady) return;
-    
-    // Skip if code hasn't changed from what we last sent
     if (code === lastSentCodeRef.current) return;
-    
+
     const debounce = setTimeout(() => {
       sendMessage("code_update", { code });
       lastSentCodeRef.current = code;
-    }, 150); // 150ms for better responsiveness
-    
+    }, 150);
+
     return () => clearTimeout(debounce);
   }, [code, socketReady, sendMessage]);
 
@@ -89,20 +71,16 @@ export default function useCollaborativeSession(sessionId, userId, username) {
 
   const sendChatMessage = (text) => {
     if (!text.trim() || !socketReady) return;
-    console.log("Sending chat message:", text);
+    // Broadcast chat_message to both clients
     sendMessage("chat_message", { text });
-    setChatMessages((prev) => [
-      ...prev,
-      { user: username, text, timestamp: new Date().toISOString() },
-    ]);
   };
 
   return {
     code,
-    setCode: handleCodeChange, // Use the wrapped version
+    setCode: handleCodeChange,
     language,
     setLanguage,
-    chatMessages,
+    chatMessages: sessionState.chatMessages || [],
     sendChatMessage,
     socketReady,
     sessionState,
