@@ -31,12 +31,8 @@ services/collaboration-service/
 │   │   └── config.py           # Configuration settings
 │   ├── api/
 │   │   └── websocket.py        # WebSocket handler and endpoints
-│   ├── events/
-│   │   └── consumer.py         # RabbitMQ event consumer
-│   ├── services/
-│   │   └── redis_service.py    # Redis operations
-│   └── utils/
-│       └── auth.py             # Authentication utilities
+│   └── events/
+│       └── consumer.py         # RabbitMQ event consumer      
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -125,7 +121,7 @@ const ws = new WebSocket(
 );
 
 ws.onopen = () => {
-  console.log('Connected to collaboration session');
+  console.log('Connected to Websocket');
 };
 
 ws.onmessage = (event) => {
@@ -134,24 +130,23 @@ ws.onmessage = (event) => {
 };
 
 ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
+  console.error('WebSocket error', error);
 };
 
 ws.onclose = () => {
-  console.log('Disconnected from session');
+  console.log('Websocket closed');
 };
 ```
 
 ## WebSocket Message Types
-
-### Incoming Messages (Server -> Client)
 
 **user_joined**
 ```json
 {
   "type": "user_joined",
   "user_id": "user-456",
-  "username": "JaneDoe"
+  "username": "JaneDoe",
+  "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
@@ -159,7 +154,8 @@ ws.onclose = () => {
 ```json
 {
   "type": "user_left",
-  "user_id": "user-456"
+  "user_id": "user-456",
+  "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
@@ -168,19 +164,22 @@ ws.onclose = () => {
 {
   "type": "code_update",
   "code": "def solution():\n    pass",
-  "user_id": "user-456"
+  "user_id": "user-456",
+  "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
-**cursor_update**
+**cursor_move**
 ```json
 {
-  "type": "cursor_update",
+  "type": "cursor_move",
   "user_id": "user-456",
+  "code": "def solution():\n    pass",
   "cursor": {
     "lineNumber": 5,
     "column": 10
-  }
+  },
+  "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
@@ -189,7 +188,8 @@ ws.onclose = () => {
 {
   "type": "language_change",
   "language": "javascript",
-  "user_id": "user-456"
+  "user_id": "user-456",
+  "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
 
@@ -199,7 +199,7 @@ ws.onclose = () => {
   "type": "chat_message",
   "user_id": "user-456",
   "username": "JaneDoe",
-  "message": "Hello!",
+  "text": "Hello!",
   "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
@@ -211,6 +211,7 @@ ws.onclose = () => {
   "session_id": "session-uuid",
   "question_id": "question-id",
   "code": "current code content",
+  "chat": "chat history",
   "language": "python",
   "users": [
     {
@@ -218,54 +219,11 @@ ws.onclose = () => {
       "username": "JohnDoe",
       "cursor": null
     }
-  ]
+  ],
+  "created_at": "2025-11-12T10:30:00Z"
 }
 ```
 
-### Outgoing Messages (Client -> Server)
-
-**code_change**
-
-Update code content:
-```json
-{
-  "type": "code_change",
-  "code": "def solution():\n    return True"
-}
-```
-
-**cursor_move**
-
-Update cursor position:
-```json
-{
-  "type": "cursor_move",
-  "cursor": {
-    "lineNumber": 5,
-    "column": 10
-  }
-}
-```
-
-**language_change**
-
-Change programming language:
-```json
-{
-  "type": "language_change",
-  "language": "javascript"
-}
-```
-
-**chat**
-
-Send chat message:
-```json
-{
-  "type": "chat",
-  "message": "Hello, partner!"
-}
-```
 
 ## REST API Endpoints
 
