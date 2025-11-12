@@ -1,91 +1,95 @@
-# PeerPrep Matching Service
+# Matching Service
 
-The Matching Service is a FastAPI-based microservice in the PeerPrep system that handles real-time user matching, confirmation, and session initialization for collaborative coding sessions.
-
-It connects to PostgreSQL, Redis, RabbitMQ, and other internal services (User Service, Question Service) to provide an end-to-end matching workflow.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Tech Stack](#tech-stack)
-4. [Setup](#setup)
-   - [Prerequisites](#prerequisites)
-   - [Environment Variables](#environment-variables)
-   - [Running with Docker Compose](#running-with-docker-compose)
-   - [Local Development](#local-development)
-5. [API Reference](#api-reference)
-   - [Matching Endpoints](#matching-endpoints)
-   - [Session Endpoints](#session-endpoints)
-   - [WebSocket Endpoint](#websocket-endpoint)
-6. [Matching Flow](#matching-flow)
-7. [Data Models](#data-models)
-   - [Database Models](#database-models)
-   - [Redis Structures](#redis-structures)
-   - [RabbitMQ Event](#rabbitmq-event)
-8. [Error Handling](#error-handling)
-9. [Development Notes](#development-notes)
----
+The Matching Service handles real-time user matching for PeerPrep. This guide helps developers from other services set up and test the Matching Service locally.
 
 ## Overview
 
-The service allows users to request a match based on:
-- difficulty (Easy, Medium, Hard)
-- topic (e.g. arrays, dp, graph)
-
-When two compatible requests are found, the service:
-1. notifies both users via WebSocket,
-2. waits for both to confirm,
-3. creates a collaboration session in Redis,
-4. publishes a `match.found` event to RabbitMQ for the collaboration service to pick up.
-
-Timeouts and cancellations are handled automatically.
-
----
+- Technology: FastAPI, Redis, PostgreSQL, RabbitMQ
+- Port: 8002
+- Real-time: WebSocket connections for instant notifications
+- Queue: Redis-backed matching queue
+- Messaging: RabbitMQ for session events
 
 ## Features
 
-- Create and queue match requests in Redis based on difficulty and topic.
-- Background matching that periodically searches for compatible partners.
-- Two-sided match confirmation.
-- Real-time notifications via WebSockets.
-- Session bootstrap in Redis (question, language, users).
-- Event publishing to RabbitMQ (`matching.events`) for downstream services.
-- Timeout and requeue on no confirmation.
-- Fallback to Redis scanning to recover sessions if DB is out of sync.
+- Real-time peer matching based on difficulty and topic
+- Redis-backed queue for fast matchmaking
+- Two-sided match confirmation
+- WebSocket notifications for match events
+- Session creation in Redis
+- Event publishing to RabbitMQ for Collaboration Service
+- Automatic timeout handling and requeuing
 
----
+## Project Structure
 
-## Tech Stack
+```
+services/matching-service/
+├── app/
+│   ├── main.py                 # FastAPI application
+│   ├── core/
+│   │   └── config.py           # Configuration settings
+│   ├── models/
+│   │   ├── match_request.py    # Match request model
+│   │   └── match.py            # Match model
+│   ├── schemas/
+│   │   └── matching.py         # Pydantic schemas
+│   ├── api/
+│   │   ├── matching.py         # Matching endpoints
+│   │   └── websocket.py        # WebSocket handler
+│   ├── services/
+│   │   ├── matching_service.py # Matching logic
+│   │   └── redis_service.py    # Redis operations
+│   ├── clients/
+│   │   ├── question_client.py  # Question Service client
+│   │   └── rabbitmq_client.py  # RabbitMQ publisher
+│   └── utils/
+│       └── auth.py             # JWT verification
+├── alembic/
+│   ├── env.py
+│   └── versions/               # Migration files
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
+```
 
-- Language/Runtime: Python 3.x (async)
-- Framework: FastAPI
-- ORM: SQLAlchemy
-- Database: PostgreSQL
-- Cache/Queue: Redis (sorted sets)
-- Messaging: RabbitMQ
-- Auth: JWT (shared secret with User Service)
-- HTTP client: httpx
-- Container: Docker, docker-compose
+## Quick Start with Docker Compose
 
----
+### From Root Project
 
-## Setup
+```powershell
+# Start all services (includes matching-service)
+docker compose up -d
 
-### Prerequisites
+# Check matching-service status
+docker compose ps matching-service
 
-- Docker and docker-compose
-- Access to User Service and Question Service (or stubs/mocks)
-- Python 3.11+ for local development
+# View logs
+docker compose logs -f matching-service
+```
 
-### Environment Variables
+### Standalone Setup
 
-Create a `.env` file at the project root. Example:
+```powershell
+# Navigate to matching-service directory
+cd services/matching-service
 
-```bash
-# App
+# Start dependencies and matching-service
+docker compose up -d --build
+
+# Run database migrations
+docker compose exec matching-service alembic upgrade head
+
+# Verify service is running
+curl http://localhost:8002/health
+```
+
+## Environment Configuration
+
+Create a `.env` file in `services/matching-service/`:
+
+```env
+# Application
 APP_NAME=peerprep-matching-service
 ENV=dev
 HOST=0.0.0.0
@@ -93,7 +97,7 @@ PORT=8002
 LOG_LEVEL=INFO
 
 # Database
-DATABASE_URL=postgresql+psycopg://peerprep:peerprep@postgres:5432/peerprep_matches
+DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5435/matching_db
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -101,102 +105,75 @@ REDIS_URL=redis://redis:6379/0
 # RabbitMQ
 RABBITMQ_URL=amqp://admin:password@rabbitmq:5672/
 
-# External services
-QUESTION_SERVICE_URL=http://localhost:8003
-QUESTION_SERVICE_BASE_PATH=/api/v1
-USER_SERVICE_URL=http://localhost:8001
-USER_SERVICE_VERIFY_PATH=/users/me
+# External Services
+QUESTION_SERVICE_URL=http://question-service:8003
+USER_SERVICE_URL=http://user-service:8001
 
-# Auth
+# Auth (must match User Service)
 AUTH_ALGORITHM=HS256
-AUTH_ACCESS_SECRET=dev-only-change-me
-AUTH_ISSUER=user-service
+AUTH_ACCESS_SECRET=secretkey
 
-# Matching
+# Matching Configuration
 MATCHING_TIMEOUT_SECONDS=60
 CONFIRM_MATCH_TIMEOUT_SECONDS=120
-MAX_CONCURRENT_MATCHES=5000
 ```
-
-### Running with Docker Compose
-
-```bash
-docker compose up --build
-```
-
-The matching service will be available at:
-
-http://localhost:8002
-
-### Local Development
-
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
-```
-
----
 
 ## API Endpoints
 
-This document lists all the REST and WebSocket endpoints for the **Matching Service**.
+Base URL: `http://localhost:8002/api/v1/matching`
 
-Base URL:
+### Health Check
 
-```
-/api/v1/matching
-```
-
----
-
-## 1. Matching Endpoints
-
-### Create Match Request
-
-**POST** `/request`
-
-Create a new match request for the logged-in user.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
-Content-Type: application/json
+```powershell
+# GET /health
+curl http://localhost:8002/health
 ```
 
-**Body**
-```json
-{
-  "difficulty": "Easy",
-  "topic": "arrays"
-}
+### Matching Endpoints
+
+**POST /request**
+
+Create a new match request.
+
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/request `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "difficulty": "easy",
+    "topic": "Array"
+  }'
 ```
 
-**Response (200)**
+Response:
 ```json
 {
   "id": "uuid",
   "user_id": "user-123",
-  "difficulty": "Easy",
-  "topic": "arrays",
+  "difficulty": "easy",
+  "topic": "Array",
   "status": "pending",
-  "created_at": "2025-11-10T06:40:23Z"
+  "created_at": "2025-11-12T06:40:23Z"
 }
 ```
 
----
+**GET /requests/{request_id}/status**
 
-### Get Match Request Status
+Check match request status.
 
-**GET** `/requests/{request_id}/status`
-
-Check whether a match request is still pending or has been matched.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
+```powershell
+curl http://localhost:8002/api/v1/matching/requests/{request_id}/status `
+  -H "Authorization: Bearer <access_token>"
 ```
 
-**Response (matched)**
+Response (pending):
+```json
+{
+  "status": "pending"
+}
+```
+
+Response (matched):
 ```json
 {
   "status": "matched",
@@ -204,56 +181,30 @@ Authorization: Bearer <ACCESS_TOKEN>
 }
 ```
 
-**Response (pending)**
-```json
-{
-  "status": "pending"
-}
+**DELETE /request/{request_id}**
+
+Cancel a pending match request.
+
+```powershell
+curl -X DELETE http://localhost:8002/api/v1/matching/request/{request_id} `
+  -H "Authorization: Bearer <access_token>"
 ```
 
----
+**POST /confirm**
 
-### Cancel Match Request
+Confirm or decline a match.
 
-**DELETE** `/request/{request_id}`
-
-Cancel a match request that has not yet been matched.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
-```
-
-**Response**
-```json
-{ "message": "Match request cancelled" }
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/confirm `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "match_id": "match-uuid",
+    "confirmed": true
+  }'
 ```
 
----
-
-### Confirm Match
-
-**POST** `/confirm`
-
-Confirm or decline a match after being paired with another user.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
-Content-Type: application/json
-```
-
-**Body**
-```json
-{
-  "match_id": "match-uuid",
-  "confirmed": true
-}
-```
-
-**Responses**
-
-**1. Waiting for partner**
+Response (waiting):
 ```json
 {
   "status": "waiting_for_partner",
@@ -261,7 +212,7 @@ Content-Type: application/json
 }
 ```
 
-**2. Both confirmed — session created**
+Response (both confirmed):
 ```json
 {
   "match_id": "match-uuid",
@@ -271,190 +222,296 @@ Content-Type: application/json
 }
 ```
 
-**3. Declined — partner requeued**
-```json
-{
-  "status": "cancelled",
-  "requeued_partner": true,
-  "match_id": "match-uuid"
-}
+**GET /{match_id}/status**
+
+Check match confirmation status.
+
+```powershell
+curl http://localhost:8002/api/v1/matching/{match_id}/status `
+  -H "Authorization: Bearer <access_token>"
 ```
 
----
+### Session Endpoints
 
-### Get Match Status
+**GET /sessions/active**
 
-**GET** `/{match_id}/status`
+Get active collaboration session for current user.
 
-Check confirmation and session creation status for a match.
-
-**Response**
-```json
-{
-  "confirm_status": true,
-  "session_id": "session-uuid"
-}
+```powershell
+curl http://localhost:8002/api/v1/matching/sessions/active `
+  -H "Authorization: Bearer <access_token>"
 ```
 
----
+**GET /session/{session_id}**
 
-## 2. Session Endpoints
+Get session details from Redis.
 
-### Get Active Session for User
-
-**GET** `/sessions/active`
-
-Get the currently active collaboration session for the logged-in user.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
+```powershell
+curl http://localhost:8002/api/v1/matching/session/{session_id} `
+  -H "Authorization: Bearer <access_token>"
 ```
 
-**Response**
-```json
-{
-  "match_id": "match-uuid",
-  "session_id": "session-uuid",
-  "partner_id": "user-456",
-  "question": {
-    "id": "question-id",
-    "title": "Two Sum",
-    "difficulty": "easy",
-    "topics": ["arrays"]
-  }
-}
+**POST /sessions/leave**
+
+Leave current collaboration session.
+
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/sessions/leave `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{"session_id": "session-uuid"}'
 ```
 
-**Error (404)**
-```json
-{ "detail": "No active session" }
+### WebSocket Endpoint
+
+**GET /ws?token={access_token}**
+
+Connect to WebSocket for real-time match notifications.
+
+```javascript
+const ws = new WebSocket('ws://localhost:8002/api/v1/matching/ws?token=<access_token>');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
 ```
 
----
-
-### Get Session Details
-
-**GET** `/session/{session_id}`
-
-Fetch full session information (question, language, users) from Redis.
-
-**Response**
-```json
-{
-  "question": {
-    "id": "question-id",
-    "title": "Two Sum",
-    "difficulty": "easy",
-    "topics": ["arrays"]
-  },
-  "code": "",
-  "language": "python",
-  "users": ["user-123", "user-456"]
-}
-```
-
-**Error (404)**
-```json
-{ "detail": "Session not found" }
-```
-
----
-
-### Leave Session
-
-**POST** `/sessions/leave`
-
-Indicate that the user has left a collaborative session.
-
-**Headers**
-```
-Authorization: Bearer <ACCESS_TOKEN>
-Content-Type: application/json
-```
-
-**Body**
-```json
-{
-  "session_id": "session-uuid"
-}
-```
-
-**Response**
-```json
-{ "status": "left" }
-```
-
-This will:
-- Remove the user from the `users` list in Redis
-- Notify the remaining user(s) via WebSocket (`partner_left`)
-
----
-
-## 3. WebSocket Endpoint
-
-### Connect to WebSocket
-
-**GET** `/ws?token=<ACCESS_TOKEN>`
-
-Establish a WebSocket connection for real-time updates.
-
-**Example Events**
-
-#### Match Found
-```json
-{
-  "type": "match_found",
-  "match_id": "match-uuid",
-  "partner_id": "user-456",
-  "difficulty": "Easy",
-  "topic": "arrays"
-}
-```
-
-#### Match Expired
-```json
-{
-  "type": "match_expired",
-  "reason": "confirmation_timeout"
-}
-```
-
-#### Partner Left
-```json
-{
-  "type": "partner_left",
-  "session_id": "session-uuid",
-  "user_id": "user-123"
-}
-```
-
----
-
-### Notes
-
-- All protected endpoints require a valid **JWT Access Token**.
-- Tokens are validated using the `AUTH_ACCESS_SECRET` shared with the User Service.
-- Real-time updates are only available while connected via WebSocket.
-
----
+WebSocket events:
+- `match_found`: A compatible match was found
+- `match_ready`: Both users confirmed, session created
+- `match_expired`: Match timed out or was declined
+- `partner_left`: Partner left the session
 
 ## Matching Flow
 
-1. User sends `POST /request`.
-2. Service stores request in Postgres and enqueues it in Redis.
-3. Background task polls Redis for compatible requests.
-4. When a match is found, both users are notified via WebSocket.
-5. Both confirm to proceed.
-6. Session is created and question fetched from Question Service.
-7. `match.found` event is published to RabbitMQ.
-8. Collaboration Service consumes it and opens a shared coding session.
+1. User creates a match request via `POST /request`
+2. Request is stored in PostgreSQL and queued in Redis
+3. Background task continuously searches for compatible match requests
+4. When a match is found:
+   - Both users are notified via WebSocket
+   - Match record is created in database
+5. Both users must confirm the match via `POST /confirm`
+6. Upon both confirmations:
+   - Session is created in Redis
+   - Question is fetched from Question Service
+   - RabbitMQ event is published for Collaboration Service
+7. Collaboration Service consumes event and initializes session
 
----
+## Integration with Other Services
 
-## Error Handling
+### Question Service Integration
 
-- 400 Bad Request – invalid or duplicate request.
-- 401 Unauthorized – invalid or expired JWT.
-- 404 Not Found – no match or session.
-- 500 Internal Server Error – unexpected backend issue.
+The Matching Service fetches questions based on matched criteria:
+
+```python
+import httpx
+
+async def get_question(difficulty: str, topic: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{QUESTION_SERVICE_URL}/questions/filter/topics-difficulty",
+            params={"difficulty": difficulty, "topics": topic}
+        )
+        return response.json()
+```
+
+### Collaboration Service Integration
+
+After successful match confirmation, the Matching Service publishes an event to RabbitMQ:
+
+```json
+{
+  "event_type": "match.found",
+  "session_id": "session-uuid",
+  "users": ["user-123", "user-456"],
+  "question_id": "question-id",
+  "difficulty": "easy",
+  "topic": "Array"
+}
+```
+
+### User Service Integration
+
+JWT tokens are verified by calling the User Service:
+
+```python
+async def verify_token(token: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{USER_SERVICE_URL}/users/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return response.json()
+```
+
+## Redis Data Structures
+
+### Match Queue
+
+Sorted sets organized by difficulty and topic:
+
+```
+Key: queue:{difficulty}:{topic}
+Value: user_id
+Score: timestamp
+```
+
+### Session Data
+
+Session information stored as hash:
+
+```
+Key: session:{session_id}
+Fields:
+  - question: JSON question data
+  - code: Current code content
+  - language: Selected programming language
+  - users: JSON array of user IDs
+```
+
+## Database Management
+
+### Running Migrations
+
+```powershell
+# Apply all pending migrations
+docker compose exec matching-service alembic upgrade head
+
+# View migration history
+docker compose exec matching-service alembic history
+
+# Rollback one migration
+docker compose exec matching-service alembic downgrade -1
+```
+
+### Direct Database Access
+
+```powershell
+# Connect to PostgreSQL
+docker compose exec postgres psql -U postgres -d matching_db
+
+# View match requests
+SELECT id, user_id, difficulty, topic, status FROM match_requests;
+
+# View matches
+SELECT id, user1_id, user2_id, session_id FROM matches;
+
+# Exit
+\q
+```
+
+## Common Docker Commands
+
+```powershell
+# View service logs
+docker compose logs -f matching-service
+
+# Access service shell
+docker compose exec matching-service sh
+
+# Check Redis data
+docker compose exec redis redis-cli
+redis> KEYS *
+redis> GET session:session-uuid
+
+# Restart service
+docker compose restart matching-service
+
+# Rebuild service
+docker compose build matching-service
+docker compose up -d matching-service
+```
+
+## Troubleshooting
+
+### Redis Connection Issues
+
+```powershell
+# Check if Redis is running
+docker compose ps redis
+
+# Test Redis connection
+docker compose exec redis redis-cli ping
+
+# View Redis logs
+docker compose logs redis
+```
+
+### RabbitMQ Connection Issues
+
+```powershell
+# Check RabbitMQ status
+docker compose ps rabbitmq
+
+# Access RabbitMQ management UI
+# Navigate to: http://localhost:15672
+# Login: admin / password
+
+# View RabbitMQ logs
+docker compose logs rabbitmq
+```
+
+### Question Service Integration Issues
+
+```powershell
+# Verify Question Service is accessible
+curl http://localhost:8003/health
+
+# Check matching-service can reach question-service
+docker compose exec matching-service curl http://question-service:8003/health
+```
+
+### WebSocket Connection Issues
+
+- Ensure JWT token is valid and not expired
+- Check WebSocket URL includes token parameter
+- Verify CORS settings allow WebSocket connections
+- Check browser console for connection errors
+
+### Database Connection Issues
+
+```powershell
+# Check PostgreSQL is running
+docker compose ps postgres
+
+# View database logs
+docker compose logs postgres
+
+# Test connection
+docker compose exec postgres pg_isready -U postgres
+```
+
+### Service Won't Start
+
+```powershell
+# Check for errors in logs
+docker compose logs matching-service
+
+# Ensure dependencies are ready
+docker compose ps
+
+# Rebuild from scratch
+docker compose down
+docker compose up --build
+```
+
+## Local Development Without Docker
+
+```powershell
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Ensure PostgreSQL, Redis, and RabbitMQ are running locally
+# Update .env with local connection strings
+
+# Run migrations
+alembic upgrade head
+
+# Start service
+uvicorn app.main:app --reload --port 8002
+```
