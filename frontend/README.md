@@ -130,7 +130,7 @@ const response = await fetch('/api/v1/users/me', {
 | User Service | `/api/v1/users` | `/api/v1/users/me` |
 | Question Service | `/api/v1/questions` | `/api/v1/questions/1` |
 | Matching Service | `/api/v1/matching` | `/api/v1/matching/request` |
-| Collaboration | `/api/v1/ws` | WebSocket connection |
+| Collaboration | `/api/v1/ws/session/active/` | WebSocket connection |
 
 ### API Utility
 
