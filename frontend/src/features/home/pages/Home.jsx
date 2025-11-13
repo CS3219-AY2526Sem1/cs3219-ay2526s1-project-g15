@@ -13,7 +13,8 @@ import {
   NoMatchFound,
   QuestionSelection,
   PreparingSession,
-  WaitingForPartner
+  WaitingForPartner,
+  ConfirmTimeout,
 } from "../components/right_panel";
 
 import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
@@ -25,6 +26,7 @@ export default function Home() {
 
   const {
     status,
+    setStatus,
     topic,
     setTopic,
     difficulty,
@@ -140,7 +142,7 @@ export default function Home() {
 
             {/* Match is found */}
             {status === "found" && (
-              <ConfirmMatch confirmMatch={confirmMatch} cancelSearch={cancelSearch} />
+              <ConfirmMatch confirmMatch={confirmMatch} cancelSearch={cancelSearch} setStatus={setStatus} />
             )}
 
             {/* No match found */}
@@ -151,6 +153,11 @@ export default function Home() {
             {/* Preparing session */}
             {status === "waiting_for_partner" && (
               <WaitingForPartner />
+            )}
+
+            {/* Preparing session */}
+            {status === "confirm_timeout" && (
+              <ConfirmTimeout retry={retry} />
             )}
 
             {/* Preparing session */}
