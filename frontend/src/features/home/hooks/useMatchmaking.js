@@ -9,7 +9,6 @@ import {
   getSessionDetails,
 } from "../../../shared/api/matchingService";
 import { questionService } from "../../../shared/api/questionService";
-import { COMPLETED_TOPICS } from "../constants";
 
 export default function useMatchmaking() {
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
@@ -85,7 +84,7 @@ export default function useMatchmaking() {
     fetchQuestionsAndTopics();
   }, []);
 
-  const completedTopics = COMPLETED_TOPICS;
+  const completedTopics = [];
   const firstAvailable = useMemo(
     () => topics.find(t => !completedTopics.includes(t)) || "",
     [topics, completedTopics]
