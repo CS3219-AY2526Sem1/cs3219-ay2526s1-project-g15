@@ -76,13 +76,13 @@ export default function SubmissionSummary({
                 </div>
 
                 <div className="flex justify-end gap-2">
-                <button
+                {/* <button
                     type="button"
                     onClick={() => setShowSubmitSummary(false)}
                     className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300 text-gray-800"
                 >
                     Close
-                </button>
+                </button> */}
                 <button
                     type="button"
                     onClick={() => {
