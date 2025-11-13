@@ -32,12 +32,12 @@ import { filenameByLang } from "../constants";
 function normalizeForCompare(val) {
   if (val === null || val === undefined) return "";
 
-  // numbers / booleans
+  // for numbers/booleans
   if (typeof val === "number" || typeof val === "boolean") {
     return String(val);
   }
 
-  // arrays / objects → canonical JSON string
+  // arrays/objects 
   if (typeof val === "object") {
     try {
       return JSON.stringify(val);
@@ -49,11 +49,11 @@ function normalizeForCompare(val) {
   if (typeof val === "string") {
     let s = val.trim();
 
-    // Try to JSON.parse
+    // try to JSON.parse
     try {
       const parsed = JSON.parse(s);
 
-      // For primitives like strings, numbers
+      // for primitives like strings, numbers
       if (
         typeof parsed === "string" ||
         typeof parsed === "number" ||
@@ -62,13 +62,13 @@ function normalizeForCompare(val) {
         return String(parsed);
       }
 
-      // For arrays/objects
+      // for arrays/objects
       return JSON.stringify(parsed);
     } catch {
       // continue if not JSON
     }
 
-    // Removes a single pair of outer quotes (some questions have outer quotes for expected output)
+    // removes a single pair of outer quotes (some questions have outer quotes for expected output)
     s = s.replace(/^"(.*)"$/, "$1");
     return s.trim();
   }
@@ -289,8 +289,6 @@ export default function Room() {
       console.error("Failed to end session:", err);
       // even if it fails, we still navigate away
     }
-
-    // clear client-side rememberance
     localStorage.removeItem("active_session_id");
 
     // go back home
@@ -300,6 +298,10 @@ export default function Room() {
   /**
    * UI-friendly tests
    */
+// AI Assistance Disclosure:
+// Tool: ChatGPT (model: GPT‑5 Thinking), date: 2025-10-29
+// Scope: Asked ChatGPT about the implementation approach for this function
+// Author review: I validated correctness, and edited it such that it works for our project.
   const uiTests = useMemo(() => {
     if (!question || !Array.isArray(question.test_cases)) return [];
     return question.test_cases.map((tc) => {

@@ -1,3 +1,7 @@
+// AI Assistance Disclosure:
+// Tool: ChatGPT (model: GPT‑5 Thinking), date: 2025-10-27
+// Scope: Used ChatGPT to debug 
+// Author review: Based on ChatGPT's recommendations, I corrected and edited the code so that it is solved.
 import { useState } from "react";
 import { buildHarness } from "../../../shared/utils/HarnessBuilders";
 import { LANGUAGE_MAP, filenameByLang } from "../constants";
@@ -99,17 +103,15 @@ export default function useCodeExecution(question) {
         return;
       }
 
-      // 6) run stage (defensive)
+      // 6) run stage
       const run = result.run ?? result.ran ?? null;
       if (!run) {
-        // some responses can be "just stdout" or something weird
         const msg = `Execution Error:\n${JSON.stringify(result, null, 2)}`;
         setActualOutput(msg);
         setCaseOutputs({ 1: msg });
         return;
       }
 
-      // if run.code != 0, it’s an error — but only read stderr if it exists
       if (typeof run.code === "number" && run.code !== 0) {
         const msg = `Runtime Error:\n${run.stderr || run.stdout || run.output || ""}`;
         setActualOutput(msg);

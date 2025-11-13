@@ -50,25 +50,25 @@ export default function CodeEditor({
   const isSubmittingNow = localSubmitting;
   const busy = isRunningNow || isSubmittingNow;
 
-  // Handle editor mount
+  // handle editor mount
   const handleEditorDidMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Track cursor position changes
+    // track cursor position changes as user types
     editor.onDidChangeCursorPosition((e) => {
       cursorPositionRef.current = e.position;
     });
   }, []);
 
-  // Handle local changes with cursor preservation
+  // handle local changes with cursor preservation
   const handleEditorChange = useCallback((newValue) => {
     if (readOnly) return;
     
-    // Mark as a local change
+    // mark as a local change
     isLocalChangeRef.current = true;
     
-    // Save cursor position before change
+    // save cursor position before change
     if (editorRef.current) {
       cursorPositionRef.current = editorRef.current.getPosition();
     }
@@ -90,7 +90,7 @@ export default function CodeEditor({
     const editor = editorRef.current;
     const savedPosition = cursorPositionRef.current;
     
-    // Use requestAnimationFrame to ensure DOM has updated
+    // ensure DOM has updated
     requestAnimationFrame(() => {
       try {
         // Validate position is still valid in the document

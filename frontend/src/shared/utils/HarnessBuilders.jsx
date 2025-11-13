@@ -23,6 +23,10 @@ function getFunctionName(title) {
   return fn;
 }
 
+// AI Assistance Disclosure:
+// Tool: ChatGPT (model: GPT‑5 Thinking), date: 2025-10-27
+// Scope: Used ChatGPT to figure out how build data structures so the user does not need to build them themselves
+// Author review: I edited based on ChatGPT's recommendations, and used the code that ChatGPT generated to build the data structures (sections of green code below after each 'prelude+=' ). 
 /**
  * Generate helper classes for data structures so users can call these in their code
  */
