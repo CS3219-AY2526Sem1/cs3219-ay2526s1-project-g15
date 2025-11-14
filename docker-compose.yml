@@ -1,0 +1,217 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gateway/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build:/usr/share/nginx/html:ro
+      - ./gateway/empty.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      user-service:
+        condition: service_started
+      question-service:
+        condition: service_started
+      matching-service:
+        condition: service_started
+      collaboration-service:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  cloudsql-proxy-users:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -instances=project-d7d6873b-331e-4968-a36:asia-southeast1:peerprep-users-g15=tcp:0.0.0.0:5434
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
+
+  cloudsql-proxy-matching:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -instances=tokyo-mark-477010-h5:asia-southeast1:peerprep-matching-service=tcp:0.0.0.0:5435
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
+
+  cloudsql-proxy-questions:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.10
+    command: >
+      /cloud_sql_proxy
+      -instances=parabolic-torch-422910-b0:asia-southeast1:peerprep-question-service=tcp:0.0.0.0:5436
+      -credential_file=/secrets/cloudsql/credentials.json
+    volumes:
+      - ${CLOUDSQL_CREDENTIALS_PATH}:/secrets/cloudsql/credentials.json:ro
+    networks:
+      - appnet
+
+  user-service:
+    build: ./services/user-service
+    container_name: user-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ENV: dev
+      HOST: 0.0.0.0
+      PORT: 8001
+      DATABASE_URL: postgresql+asyncpg://peerprep_user:admin@cloudsql-proxy-users:5434/peerprep_users
+      SECRET: secretkey
+      ALGORITHM: HS256
+      ACCESS_TTL_MIN: 15
+      REFRESH_TTL_DAYS: 7
+    expose:
+      - "8001"
+    ports:
+      - "8001:8001"
+    networks:
+      - appnet
+    depends_on:
+      - cloudsql-proxy-users
+
+  matching-service:
+    build: ./services/matching-service
+    container_name: matching-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8002
+      - DATABASE_URL=postgresql+psycopg://postgres:${MS_PASSWORD}@cloudsql-proxy-matching:5435/matching_db
+      - REDIS_URL=redis://redis:6379/0
+      - AUTH_ACCESS_SECRET=secretkey
+      - AUTH_ALGORITHM=HS256
+      - LOG_LEVEL=INFO
+      - MATCHING_TIMEOUT_SECONDS=60
+      - USER_SERVICE_URL=http://user-service:8001
+      - QUESTION_SERVICE_URL=http://question-service:8003
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672/
+    expose:
+      - "8002"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./shared:/app/shared
+    depends_on:
+      - postgres
+      - redis
+      - cloudsql-proxy-matching
+    networks:
+      - appnet
+
+  question-service:
+    build: ./services/question-service
+    container_name: question-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8003
+      - DATABASE_URL=postgresql+psycopg2://postgres:${QS_PASSWORD}@cloudsql-proxy-questions:5436/peerprep_questions
+      - USER_SERVICE_URL=http://user-service:8001
+      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+    expose:
+      - "8003"
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+      - cloudsql-proxy-questions
+    networks:
+      - appnet
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --proxy-headers
+
+  collaboration-service:
+    build: ./services/collaboration-service
+    container_name: collaboration-service
+    environment:
+      - ENV=dev
+      - HOST=0.0.0.0
+      - PORT=8004
+      - DATABASE_URL=postgresql+asyncpg://collaboration_user:collabpass@postgres:5432/peerprep_collaboration
+      - REDIS_URL=redis://redis:6379/0
+      - USER_SERVICE_URL=http://user-service:8001
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
+      - QUEUE_NAME=collaboration_events
+    expose:
+      - "8004"
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - appnet
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=peerprep_users
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks:
+      - appnet
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6380:6379"
+    networks:
+      - appnet
+    command: ["redis-server", "--loglevel", "warning"]
+    # command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error},{default,info}] disk_free_limit 2147483648
+    ports:
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    networks: [appnet]
+
+volumes:
+  pgdata:
+  rabbitmq_data:
+
+networks:
+  appnet:
+    driver: bridge

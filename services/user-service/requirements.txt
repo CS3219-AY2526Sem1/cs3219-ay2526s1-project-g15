@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+SQLAlchemy
+asyncpg
+alembic
+pydantic
+pydantic-settings
+passlib
+argon2-cffi
+python-jose[cryptography]
+email-validator
+psycopg2-binary
+mako
+fastapi-mail==1.4.0

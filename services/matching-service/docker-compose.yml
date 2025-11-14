@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: matching-service-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-peerprep}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-peerprep}
+      POSTGRES_DB: ${DB_NAME:-peerprep_matches}
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - matching-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: matching-service-redis
+    ports:
+      - "6381:6379"
+    networks:
+      - matching-net
+
+  matching-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matching-service-dev
+    env_file:
+      - .env
+    ports:
+      - "8002:8002"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./:/app
+    networks:
+      - matching-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+volumes:
+  pgdata:
+
+networks:
+  matching-net:
+    driver: bridge
+
