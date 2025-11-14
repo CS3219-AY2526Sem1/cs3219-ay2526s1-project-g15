@@ -127,7 +127,7 @@ export default function Home() {
                 setDifficulty={setDifficulty}
                 topics={topics}
                 completedTopics={completedTopics}
-                disableStart={disableStart}
+                disableStart={disableStart|| hasOngoingMeeting}
                 startSearch={startSearch} 
                 topicDifficultyMatrix={topicDifficultyMatrix} 
               />
