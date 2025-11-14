@@ -139,6 +139,11 @@ export default function useMatchmaking() {
 
     if (res.status === "waiting_for_partner") {
       setStatus("waiting_for_partner");
+
+      timeoutRef.current = setTimeout(() => {
+        setStatus("confirm_timeout");
+      }, 120000);
+
     } else if (res.session_id) {
       setSessionId(res.session_id);
       setStatus("preparing_session");
@@ -149,12 +154,24 @@ export default function useMatchmaking() {
     let interval;
     if (status === "waiting_for_partner") {
       interval = setInterval(async () => {
-        const res = await getMatchStatus(matchId, token);
-        if (res.confirm_status) {
-          const session_details = await getSessionDetails(res.session_id, token);
-          setQuestionId(session_details.question.id);
-          setSessionId(res.session_id);
-          setStatus("preparing_session");
+        try {
+          const res = await getMatchStatus(matchId, token);
+
+          if (res.confirm_status) {
+            const session_details = await getSessionDetails(res.session_id, token);
+            setQuestionId(session_details.question.id);
+            setSessionId(res.session_id);
+            setStatus("preparing_session");
+          }
+
+        } catch (err) {
+          if (err.message?.includes("404") || err?.response?.status === 404) {
+            console.warn("Match no longer exists — timing out");
+            clearInterval(interval);
+            setStatus("confirm_timeout");
+          } else {
+            console.error("Error checking match status", err);
+          }
         }
       }, 2000);
     }
@@ -169,6 +186,7 @@ export default function useMatchmaking() {
 
   return {
     status,
+    setStatus,
     topic,
     setTopic,
     difficulty,
