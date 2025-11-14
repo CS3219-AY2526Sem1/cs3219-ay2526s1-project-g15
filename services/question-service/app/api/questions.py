@@ -18,7 +18,6 @@ from app.schemas.question import (
 )
 from app.services.question_service import QuestionService
 from app.models.question import DifficultyLevel
-import math
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -109,9 +108,9 @@ def update_question(
     question_id: int,
     question: QuestionUpdate,
     db: Session = Depends(get_db),
-    auth_context: dict = Depends(get_question_filter_context)
+    auth_context: dict = Depends(require_admin)
 ):
-    """Update a question (same access as GET)"""
+    """Update a question (admin only)"""
     updated_question = QuestionService.update_question(
         db=db, question_id=question_id, question_data=question
     )
@@ -127,7 +126,7 @@ def update_question(
 def delete_question(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_admin)
+    auth_context: dict = Depends(require_admin)
 ):
     """Delete a question"""
     success = QuestionService.delete_question(db=db, question_id=question_id)
@@ -142,7 +141,7 @@ def delete_question(
 def toggle_question_status(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_admin)
+    auth_context: dict = Depends(require_admin)
 ):
     """Toggle question visibility (enable/disable)"""
     question = QuestionService.get_question(db=db, question_id=question_id)
