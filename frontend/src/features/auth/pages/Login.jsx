@@ -72,6 +72,7 @@ export default function Login() {
       // get access token
       if (data?.access_token) {
         localStorage.setItem("accessToken", data.access_token);
+        localStorage.setItem("refreshToken", data.refresh_token);
       } else {
         throw new Error("No access token returned from login.");
       }

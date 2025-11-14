@@ -1,21 +1,29 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: question-service-postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-peerprep_questions}
       POSTGRES_USER: ${DB_USER:-peerprep}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-peerprep}
-    ports: ["5434:5432"]
-    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   question-service:
     build: .
-    env_file: .env
-    depends_on: [postgres]
-    ports: ["8003:8003"]
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
+    container_name: question-service-dev
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    ports:
+      - "8003:8003"
     volumes:
       - ./:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
 
 volumes:
-  pgdata: {}
+  pgdata:
+

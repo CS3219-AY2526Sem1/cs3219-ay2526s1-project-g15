@@ -9,7 +9,6 @@ import {
   getSessionDetails,
 } from "../../../shared/api/matchingService";
 import { questionService } from "../../../shared/api/questionService";
-import { COMPLETED_TOPICS } from "../constants";
 
 export default function useMatchmaking() {
   const [hasOngoingMeeting, setHasOngoingMeeting] = useState(true);
@@ -23,6 +22,7 @@ export default function useMatchmaking() {
   const [questionId, setQuestionId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [username, setUsername] = useState("Guest");
+  const [topicDifficultyMatrix, setTopicDifficultyMatrix] = useState({});
 
   const token = localStorage.getItem("accessToken");
 
@@ -34,12 +34,57 @@ export default function useMatchmaking() {
     });
   }, []);
 
-  // fetch topics
+  // Function to build the topic-difficulty matrix from questions
+  const buildTopicDifficultyMatrix = (questions) => {
+    const matrix = {};
+    
+    questions.forEach(q => {
+      q.topics.forEach(topic => {
+        if (!matrix[topic]) {
+          matrix[topic] = [];
+        }
+        // Capitalize difficulty to match UI format
+        const difficulty = q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1);
+        if (!matrix[topic].includes(difficulty)) {
+          matrix[topic].push(difficulty);
+        }
+      });
+    });
+    
+    // Sort difficulties in each topic (Easy, Medium, Hard)
+    const order = { Easy: 0, Medium: 1, Hard: 2 };
+    Object.keys(matrix).forEach(topic => {
+      matrix[topic].sort((a, b) => order[a] - order[b]);
+    });
+    
+    return matrix;
+  };
+
+  // fetch topics and build matrix
   useEffect(() => {
-    questionService.getTopics().then(setTopics).catch(console.error);
+    const fetchQuestionsAndTopics = async () => {
+      try {
+        // Fetch all questions to build the matrix
+        const questions = await questionService.getQuestions();
+        
+        // Extract unique topics
+        const allTopics = [...new Set(questions.flatMap(q => q.topics))].sort();
+        setTopics(allTopics);
+        
+        // Build the topic difficulty matrix
+        const matrix = buildTopicDifficultyMatrix(questions);
+        setTopicDifficultyMatrix(matrix);
+      } catch (error) {
+        console.error('Error fetching questions:', error);
+        // just fetch topics if questions fetch fails
+        questionService.getTopics().then(setTopics).catch(console.error);
+      }
+    };
+    
+    fetchQuestionsAndTopics();
   }, []);
 
-  const completedTopics = COMPLETED_TOPICS;
+  const completedTopics = [];
   const firstAvailable = useMemo(
     () => topics.find(t => !completedTopics.includes(t)) || "",
     [topics, completedTopics]
@@ -94,6 +139,11 @@ export default function useMatchmaking() {
 
     if (res.status === "waiting_for_partner") {
       setStatus("waiting_for_partner");
+
+      timeoutRef.current = setTimeout(() => {
+        setStatus("confirm_timeout");
+      }, 120000);
+
     } else if (res.session_id) {
       setSessionId(res.session_id);
       setStatus("preparing_session");
@@ -104,12 +154,24 @@ export default function useMatchmaking() {
     let interval;
     if (status === "waiting_for_partner") {
       interval = setInterval(async () => {
-        const res = await getMatchStatus(matchId, token);
-        if (res.confirm_status) {
-          const session_details = await getSessionDetails(res.session_id, token);
-          setQuestionId(session_details.question.id);
-          setSessionId(res.session_id);
-          setStatus("preparing_session");
+        try {
+          const res = await getMatchStatus(matchId, token);
+
+          if (res.confirm_status) {
+            const session_details = await getSessionDetails(res.session_id, token);
+            setQuestionId(session_details.question.id);
+            setSessionId(res.session_id);
+            setStatus("preparing_session");
+          }
+
+        } catch (err) {
+          if (err.message?.includes("404") || err?.response?.status === 404) {
+            console.warn("Match no longer exists — timing out");
+            clearInterval(interval);
+            setStatus("confirm_timeout");
+          } else {
+            console.error("Error checking match status", err);
+          }
         }
       }, 2000);
     }
@@ -124,11 +186,13 @@ export default function useMatchmaking() {
 
   return {
     status,
+    setStatus,
     topic,
     setTopic,
     difficulty,
     setDifficulty,
     topics,
+    topicDifficultyMatrix, 
     completedTopics,
     hasOngoingMeeting,
     setHasOngoingMeeting,

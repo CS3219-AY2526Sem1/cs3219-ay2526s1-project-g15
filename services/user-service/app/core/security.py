@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.hash import argon2
 from app.core.config import settings
 
@@ -55,3 +55,14 @@ def create_verification_token(user_id: str) -> str:
         "iss": "user-service",
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def verify_refresh_token(token: str):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        if payload.get("type") != "refresh":
+            return None
+
+        return payload
+    except JWTError:
+        return None

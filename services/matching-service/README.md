@@ -1,225 +1,517 @@
-# PeerPrep Matching Service
+# Matching Service
 
-A FastAPI microservice that pairs users for collaborative coding sessions based on **difficulty** and **topic**.  
-Tech stack: **Python**, **FastAPI**, **PostgreSQL (SQLAlchemy + Psycopg)**, **Redis**, **JWT auth**, **Uvicorn**.
+The Matching Service handles real-time user matching for PeerPrep. This guide helps developers from other services set up and test the Matching Service locally.
 
----
+## Overview
+
+- Technology: FastAPI, Redis, PostgreSQL, RabbitMQ
+- Port: 8002
+- Real-time: WebSocket connections for instant notifications
+- Queue: Redis-backed matching queue
+- Messaging: RabbitMQ for session events
 
 ## Features
 
-- Create a **match request** per user for a given `difficulty` and `topic`.
-- **Redis-backed queue** for quick pairing (`matching_queue:{difficulty}:{topic}`).
-- Background task that polls every 2s to pair compatible users.
-- **WebSocket** channel to push `"match_found"`/`"match_ready"` events to each user.
-- Two-step confirmation: both users call `/confirm` to finalize a match.
-- (Extension) Orchestrate with **Question** and **Collaboration** services once both confirm.
+- Real-time peer matching based on difficulty and topic
+- Redis-backed queue for fast matchmaking
+- Two-sided match confirmation
+- WebSocket notifications for match events
+- Session creation in Redis
+- Event publishing to RabbitMQ for Collaboration Service
+- Automatic timeout handling and requeuing
 
----
+## Project Structure
 
-## Configuration
+```
+services/matching-service/
+├── app/
+│   ├── main.py                 # FastAPI application
+│   ├── core/
+│   │   └── config.py           # Configuration settings
+│   ├── models/
+│   │   ├── match_request.py    # Match request model
+│   │   └── match.py            # Match model
+│   ├── schemas/
+│   │   └── matching.py         # Pydantic schemas
+│   ├── api/
+│   │   ├── matching.py         # Matching endpoints
+│   │   └── websocket.py        # WebSocket handler
+│   ├── services/
+│   │   ├── matching_service.py # Matching logic
+│   │   └── redis_service.py    # Redis operations
+│   ├── clients/
+│   │   ├── question_client.py  # Question Service client
+│   │   └── rabbitmq_client.py  # RabbitMQ publisher
+│   └── utils/
+│       └── auth.py             # JWT verification
+├── alembic/
+│   ├── env.py
+│   └── versions/               # Migration files
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
+```
 
-All config values are loaded from environment variables (via `.env`).
+## Quick Start with Docker Compose
 
-| Key | Example | Notes |
-|---|---|---|
-| `ENV` | `dev` | Environment name |
-| `HOST` | `127.0.0.1` | Bind host |
-| `PORT` | `8002` | Bind port |
-| `DATABASE_URL` | `postgresql+psycopg://peerprep:peerprep@localhost:5433/peerprep_matches` | Use `+psycopg` (psycopg v3) or install `psycopg2-binary` and use `postgresql://...` |
-| `REDIS_URL` | `redis://localhost:6380/0` | Redis connection string |
-| `JWT_SECRET_KEY` | `secretkey` | JWT HMAC secret used to **sign and verify** tokens |
-| `JWT_ALGORITHM` | `HS256` | Algorithm for JWT |
-| `LOG_LEVEL` | `INFO` | Logging level |
-| `MATCHING_TIMEOUT_SECONDS` | `60` | How long a request remains in the queue |
-
-> Put these in `.env` for local development.
-
----
-
-## Local Dev: Bring Up Dependencies (Docker)
+### From Root Project
 
 ```powershell
-# Redis (port 6380)
-docker run --name redis-matches -p 6380:6379 -d redis:7
+# Start all services (includes matching-service)
+docker compose up -d
 
-# Postgres (port 5433) with known credentials/db
-docker run --name pg-matches-2 `
-  -e POSTGRES_USER=peerprep `
-  -e POSTGRES_PASSWORD=peerprep `
-  -e POSTGRES_DB=peerprep_matches `
-  -p 5433:5432 -d postgres:16
+# Check matching-service status
+docker compose ps matching-service
+
+# View logs
+docker compose logs -f matching-service
 ```
 
----
-
-## Install & Run
+### Standalone Setup
 
 ```powershell
-# from services\matching-service
-python -m venv .venv
-. .\.venv\Scripts\Activate.ps1
+# Navigate to matching-service directory
+cd services/matching-service
 
-pip install -r requirements.txt
-pip install "psycopg[binary]" redis httpx  # drivers & client libs
+# Start dependencies and matching-service
+docker compose up -d --build
 
-# Environment for this shell
-$env:REDIS_URL    = "redis://localhost:6380/0"
-$env:DATABASE_URL = "postgresql+psycopg://peerprep:peerprep@localhost:5433/peerprep_matches"
-$env:JWT_SECRET_KEY = "secretkey"
-$env:JWT_ALGORITHM = "HS256"
-$env:LOG_LEVEL = "INFO"
+# Run database migrations
+docker compose exec matching-service alembic upgrade head
 
-# Alembic: create versions folder ONCE if missing
-mkdir .\alembic\versions -ErrorAction Ignore
-
-# Autogenerate & apply initial migration
-alembic revision --autogenerate -m "init schema"
-alembic upgrade head
-
-# Start API
-python -m uvicorn app.main:app --reload --port 8002 --host 127.0.0.1
+# Verify service is running
+curl http://localhost:8002/health
 ```
 
-You should see on startup:
-```
-✓ Database connection successful
-✓ Redis connection successful
-```
+## Environment Configuration
 
----
+Create a `.env` file in `services/matching-service/`:
 
-## API (HTTP)
+```env
+# Application
+APP_NAME=peerprep-matching-service
+ENV=dev
+HOST=0.0.0.0
+PORT=8002
+LOG_LEVEL=INFO
 
-Base path: `http://127.0.0.1:8002/api/v1/matching`  
-FastAPI: `http://127.0.0.1:8002/docs` (click **Authorize** and paste the raw token string)
+# Database
+DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5435/matching_db
 
-### Auth
-All endpoints require `Authorization: Bearer <JWT>` with payload containing `"user_id"`.
+# Redis
+REDIS_URL=redis://redis:6379/0
 
-### Endpoints
+# RabbitMQ
+RABBITMQ_URL=amqp://admin:password@rabbitmq:5672/
 
-#### Create request
-```
-POST /request
-Body: { "difficulty": "Easy" | "Medium" | "Hard", "topic": "Arrays" }
-Resp: MatchRequestResponse
-```
+# External Services
+QUESTION_SERVICE_URL=http://question-service:8003
+USER_SERVICE_URL=http://user-service:8001
 
-#### Cancel request
-```
-DELETE /request/{id}
-Resp: { "message": "Match request cancelled" }
-```
+# Auth (must match User Service)
+AUTH_ALGORITHM=HS256
+AUTH_ACCESS_SECRET=secretkey
 
-#### Confirm match
-```
-POST /confirm
-Body: { "match_id": "<uuid>", "confirmed": true }
-Resp 200 (both confirmed):
-  { "match_id": "...", "collaboration_session_id": "...", "question_id": "...", "partner_id": "..." }
-Resp 202 (waiting):
-  { "detail": "Waiting for partner confirmation" }
+# Matching Configuration
+MATCHING_TIMEOUT_SECONDS=60
+CONFIRM_MATCH_TIMEOUT_SECONDS=120
 ```
 
-### WebSocket
+## API Endpoints
 
-```
-GET /ws?token=<JWT>
-```
-- Server pushes `{"type":"match_found","match_id":"...","partner_id":"...","difficulty":"...","topic":"..."}`
-- After both confirm (and orchestration), server can push `{"type":"match_ready","match_id":"...","collab_session_id":"...","question_id":"..."}`
+Base URL: `http://localhost:8002/api/v1/matching`
 
----
-
-## Matching Logic (High Level)
-
-1. `POST /request` creates a `MatchRequest` row (status `PENDING`), then enqueues into Redis zset  
-   key: `matching_queue:{difficulty}:{topic}` with score = enqueue time.
-2. A background task polls every 2s up to 60s to find a partner:
-   - Pops a small batch from zset, skips self, picks the first other user, reinserts skipped entries.
-   - Creates a `Match` row, flips both requests to `MATCHED`, removes entries from zset.
-   - Notifies both users over WebSocket with `"match_found"`.
-3. Each user calls `POST /confirm`. When both sides are confirmed:
-   - (Optional orchestration) call **Question** service to select a question.
-   - call **Collaboration** service to create a room.
-   - Persist `question_id` & `collaboration_session_id`, push `"match_ready"` to both users.
-
----
-
-## Quick Test Flow (PowerShell)
+### Health Check
 
 ```powershell
-# 0) Mint two tokens
-python -m scripts.make_tokens
-$token1 = 'PASTE_TOKEN_FROM_u1'
-$token2 = 'PASTE_TOKEN_FROM_u2'
-$H1 = @{ Authorization = "Bearer $token1" }
-$H2 = @{ Authorization = "Bearer $token2" }
-
-# 1) Sanity auth
-Invoke-RestMethod "http://127.0.0.1:8002/api/v1/matching/debug/whoami" -Headers $H1
-
-# 2) Create two requests (same topic+difficulty)
-$r1 = Invoke-RestMethod -Method POST "http://127.0.0.1:8002/api/v1/matching/request" -Headers $H1 -ContentType "application/json" -Body '{"difficulty":"Easy","topic":"Arrays"}'
-$r2 = Invoke-RestMethod -Method POST "http://127.0.0.1:8002/api/v1/matching/request" -Headers $H2 -ContentType "application/json" -Body '{"difficulty":"Easy","topic":"Arrays"}'
-
-# 3) Observe match (dev-only)
-Invoke-RestMethod "http://127.0.0.1:8002/api/v1/matching/debug/matches"
-
-# 4) Confirm from both users
-$matchId = "<paste id from /debug/matches>"
-Invoke-RestMethod -Method POST "http://127.0.0.1:8002/api/v1/matching/confirm" -Headers $H1 -ContentType "application/json" -Body (@{ match_id = $matchId; confirmed = $true } | ConvertTo-Json)
-Invoke-RestMethod -Method POST "http://127.0.0.1:8002/api/v1/matching/confirm" -Headers $H2 -ContentType "application/json" -Body (@{ match_id = $matchId; confirmed = $true } | ConvertTo-Json)
+# GET /health
+curl http://localhost:8002/health
 ```
 
----
+### Matching Endpoints
 
-## Dev‑Only Debug Endpoints
+**POST /request**
 
-> Add these to `app/api/matching.py` while developing; remove before production.
+Create a new match request.
 
-- `GET /debug/whoami` → returns `{ "user_id": ... }` based on JWT.
-- `GET /debug/matches` → list all `Match` rows.
-- `GET /debug/my-requests` → list all `MatchRequest` for the caller.
-- `GET /debug/queue/{difficulty}/{topic}` → inspect Redis zset for a bucket.
-- `POST /debug/poll/{request_id}` → force a single matching attempt for that request.
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/request `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "difficulty": "easy",
+    "topic": "Array"
+  }'
+```
 
----
+Response:
+```json
+{
+  "id": "uuid",
+  "user_id": "user-123",
+  "difficulty": "easy",
+  "topic": "Array",
+  "status": "pending",
+  "created_at": "2025-11-12T06:40:23Z"
+}
+```
+
+**GET /requests/{request_id}/status**
+
+Check match request status.
+
+```powershell
+curl http://localhost:8002/api/v1/matching/requests/{request_id}/status `
+  -H "Authorization: Bearer <access_token>"
+```
+
+Response (pending):
+```json
+{
+  "status": "pending"
+}
+```
+
+Response (matched):
+```json
+{
+  "status": "matched",
+  "match_id": "match-uuid"
+}
+```
+
+**DELETE /request/{request_id}**
+
+Cancel a pending match request.
+
+```powershell
+curl -X DELETE http://localhost:8002/api/v1/matching/request/{request_id} `
+  -H "Authorization: Bearer <access_token>"
+```
+
+**POST /confirm**
+
+Confirm or decline a match.
+
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/confirm `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{
+    "match_id": "match-uuid",
+    "confirmed": true
+  }'
+```
+
+Response (waiting):
+```json
+{
+  "status": "waiting_for_partner",
+  "match_id": "match-uuid"
+}
+```
+
+Response (both confirmed):
+```json
+{
+  "match_id": "match-uuid",
+  "session_id": "session-uuid",
+  "question_id": "question-id",
+  "partner_id": "user-456"
+}
+```
+
+**GET /{match_id}/status**
+
+Check match confirmation status.
+
+```powershell
+curl http://localhost:8002/api/v1/matching/{match_id}/status `
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Session Endpoints
+
+**GET /sessions/active**
+
+Get active collaboration session for current user.
+
+```powershell
+curl http://localhost:8002/api/v1/matching/sessions/active `
+  -H "Authorization: Bearer <access_token>"
+```
+
+**GET /session/{session_id}**
+
+Get session details from Redis.
+
+```powershell
+curl http://localhost:8002/api/v1/matching/session/{session_id} `
+  -H "Authorization: Bearer <access_token>"
+```
+
+**POST /sessions/leave**
+
+Leave current collaboration session.
+
+```powershell
+curl -X POST http://localhost:8002/api/v1/matching/sessions/leave `
+  -H "Authorization: Bearer <access_token>" `
+  -H "Content-Type: application/json" `
+  -d '{"session_id": "session-uuid"}'
+```
+
+### WebSocket Endpoint
+
+**GET /ws?token={access_token}**
+
+Connect to WebSocket for real-time match notifications.
+
+```javascript
+const ws = new WebSocket('ws://localhost:8002/api/v1/matching/ws?token=<access_token>');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
+```
+
+WebSocket events:
+- `match_found`: A compatible match was found
+- `match_ready`: Both users confirmed, session created
+- `match_expired`: Match timed out or was declined
+- `partner_left`: Partner left the session
+
+## Matching Flow
+
+1. User creates a match request via `POST /request`
+2. Request is stored in PostgreSQL and queued in Redis
+3. Background task continuously searches for compatible match requests
+4. When a match is found:
+   - Both users are notified via WebSocket
+   - Match record is created in database
+5. Both users must confirm the match via `POST /confirm`
+6. Upon both confirmations:
+   - Session is created in Redis
+   - Question is fetched from Question Service
+   - RabbitMQ event is published for Collaboration Service
+7. Collaboration Service consumes event and initializes session
+
+## Integration with Other Services
+
+### Question Service Integration
+
+The Matching Service fetches questions based on matched criteria:
+
+```python
+import httpx
+
+async def get_question(difficulty: str, topic: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{QUESTION_SERVICE_URL}/questions/filter/topics-difficulty",
+            params={"difficulty": difficulty, "topics": topic}
+        )
+        return response.json()
+```
+
+### Collaboration Service Integration
+
+After successful match confirmation, the Matching Service publishes an event to RabbitMQ:
+
+```json
+{
+  "event_type": "match.found",
+  "session_id": "session-uuid",
+  "users": ["user-123", "user-456"],
+  "question_id": "question-id",
+  "difficulty": "easy",
+  "topic": "Array"
+}
+```
+
+### User Service Integration
+
+JWT tokens are verified by calling the User Service:
+
+```python
+async def verify_token(token: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{USER_SERVICE_URL}/users/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return response.json()
+```
+
+## Redis Data Structures
+
+### Match Queue
+
+Sorted sets organized by difficulty and topic:
+
+```
+Key: queue:{difficulty}:{topic}
+Value: user_id
+Score: timestamp
+```
+
+### Session Data
+
+Session information stored as hash:
+
+```
+Key: session:{session_id}
+Fields:
+  - question: JSON question data
+  - code: Current code content
+  - language: Selected programming language
+  - users: JSON array of user IDs
+```
+
+## Database Management
+
+### Running Migrations
+
+```powershell
+# Apply all pending migrations
+docker compose exec matching-service alembic upgrade head
+
+# View migration history
+docker compose exec matching-service alembic history
+
+# Rollback one migration
+docker compose exec matching-service alembic downgrade -1
+```
+
+### Direct Database Access
+
+```powershell
+# Connect to PostgreSQL
+docker compose exec postgres psql -U postgres -d matching_db
+
+# View match requests
+SELECT id, user_id, difficulty, topic, status FROM match_requests;
+
+# View matches
+SELECT id, user1_id, user2_id, session_id FROM matches;
+
+# Exit
+\q
+```
+
+## Common Docker Commands
+
+```powershell
+# View service logs
+docker compose logs -f matching-service
+
+# Access service shell
+docker compose exec matching-service sh
+
+# Check Redis data
+docker compose exec redis redis-cli
+redis> KEYS *
+redis> GET session:session-uuid
+
+# Restart service
+docker compose restart matching-service
+
+# Rebuild service
+docker compose build matching-service
+docker compose up -d matching-service
+```
 
 ## Troubleshooting
 
-- **401 Invalid authentication credentials**  
-  Make sure header is `Authorization: Bearer <raw-token>` (no `< >`). JWT secret/algorithm in `.env` must match the token generator.
+### Redis Connection Issues
 
-- **500 on `/request`**  
-  Ensure Redis and Postgres are up and `REDIS_URL` / `DATABASE_URL` env vars are set **in the shell** that runs uvicorn. Check startup logs for ✓ Redis/DB. Verify migrations: `alembic upgrade head`.
+```powershell
+# Check if Redis is running
+docker compose ps redis
 
-- **`psycopg` / driver errors**  
-  Install `pip install "psycopg[binary]"` and use `postgresql+psycopg://...` in `DATABASE_URL`. For `psycopg2-binary`, use `postgresql://...`.
+# Test Redis connection
+docker compose exec redis redis-cli ping
 
-- **Alembic `versions` folder missing**  
-  `mkdir alembic/versions` then rerun `alembic revision --autogenerate -m "init schema"`.
-
-- **Cannot bind Redis 6379**  
-  Another process uses the port. Either reuse it, stop it, or map a different host port (e.g., `-p 6380:6379` and set `REDIS_URL=redis://localhost:6380/0`).
-
-- **“User already has a pending match request”**  
-  Either cancel the pending one (`DELETE /request/{id}`) or make the endpoint idempotent (return existing when params match). Dev-only DB reset: set all `PENDING` → `CANCELLED` in `match_requests`.
-
----
-
-## Extending: Orchestration on Confirm
-
-When both users confirm, call your other services:
-
-```python
-# Question service
-POST {QUESTION_SVC_URL}/api/v1/questions/select
-{ "difficulty": "Easy", "topic": "Arrays" } -> { "id": "q123", ... }
-
-# Collaboration service
-POST {COLLAB_SVC_URL}/api/v1/collab/sessions
-{ "user_ids": ["user-1","user-2"], "question_id": "q123" } -> { "session_id": "room-xyz" }
+# View Redis logs
+docker compose logs redis
 ```
 
-Save these IDs to the `matches` row and notify both users via WebSocket.
+### RabbitMQ Connection Issues
+
+```powershell
+# Check RabbitMQ status
+docker compose ps rabbitmq
+
+# Access RabbitMQ management UI
+# Navigate to: http://localhost:15672
+# Login: admin / password
+
+# View RabbitMQ logs
+docker compose logs rabbitmq
+```
+
+### Question Service Integration Issues
+
+```powershell
+# Verify Question Service is accessible
+curl http://localhost:8003/health
+
+# Check matching-service can reach question-service
+docker compose exec matching-service curl http://question-service:8003/health
+```
+
+### WebSocket Connection Issues
+
+- Ensure JWT token is valid and not expired
+- Check WebSocket URL includes token parameter
+- Verify CORS settings allow WebSocket connections
+- Check browser console for connection errors
+
+### Database Connection Issues
+
+```powershell
+# Check PostgreSQL is running
+docker compose ps postgres
+
+# View database logs
+docker compose logs postgres
+
+# Test connection
+docker compose exec postgres pg_isready -U postgres
+```
+
+### Service Won't Start
+
+```powershell
+# Check for errors in logs
+docker compose logs matching-service
+
+# Ensure dependencies are ready
+docker compose ps
+
+# Rebuild from scratch
+docker compose down
+docker compose up --build
+```
+
+## Local Development Without Docker
+
+```powershell
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Ensure PostgreSQL, Redis, and RabbitMQ are running locally
+# Update .env with local connection strings
+
+# Run migrations
+alembic upgrade head
+
+# Start service
+uvicorn app.main:app --reload --port 8002
+```

@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8003/api/v1/questions/';
+const API_BASE = '/api/v1/questions/';
 
 function authHeaders() {
   const t = localStorage.getItem('accessToken');
@@ -6,21 +6,49 @@ function authHeaders() {
 }
 
 async function fetchJson(url, init = {}) {
-  const res = await fetch(url, {
-    ...init,
-    headers: { Accept: 'application/json', ...(init.headers || {}) },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
+  let res;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { Accept: 'application/json', ...(init.headers || {}) },
+    });
+  } catch (err) {
+    const e = new Error(`Question already exists! Please choose a different question name.`);
+    e.isNetworkError = true;
+    throw e;
+  }
+
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!res.ok) {
+    const backendMsg =
+      (data && (data.detail || data.message || data.error)) ||
+      (typeof data === 'string' ? data : null);
+
+    const e = new Error(
+      backendMsg || `Request failed with status ${res.status}`
+    );
+    e.status = res.status;
+    e.data = data;
+    throw e;
+  }
+
+  return data;
 }
+
+
 
 export const questionService = {
   async getQuestions(params = {}) {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${API_BASE}?${queryString}` : API_BASE;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch questions');
-    const data = await response.json();
+    const data = await fetchJson(url, { headers: authHeaders() });
 
     // Handle paginated response format
     if (data.questions && Array.isArray(data.questions)) {
@@ -91,5 +119,10 @@ export const questionService = {
 
   async getTopics() {
     return fetchJson(`${API_BASE}topics`, { headers: authHeaders() });
+  },
+
+  async getTotalCount() {
+    const data = await fetchJson(`${API_BASE}count`, { headers: authHeaders() });
+    return data?.total ?? 0;
   },
 };

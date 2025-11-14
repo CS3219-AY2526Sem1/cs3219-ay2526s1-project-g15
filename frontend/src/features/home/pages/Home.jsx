@@ -1,4 +1,4 @@
-import { useEffect} from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // Hook imports
@@ -13,7 +13,8 @@ import {
   NoMatchFound,
   QuestionSelection,
   PreparingSession,
-  WaitingForPartner
+  WaitingForPartner,
+  ConfirmTimeout,
 } from "../components/right_panel";
 
 import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
@@ -21,8 +22,11 @@ import useCollaborationSocket from "../../session/hooks/useCollaborationSocket";
 export default function Home() {
   const navigate = useNavigate();
 
+  const [rejoinSession, setRejoinSession] = useState(null);
+
   const {
     status,
+    setStatus,
     topic,
     setTopic,
     difficulty,
@@ -39,6 +43,7 @@ export default function Home() {
     sessionId,
     username,
     userId,
+    topicDifficultyMatrix,
   } = useMatchmaking();
 
   // connect WebSocket once preparing
@@ -46,7 +51,7 @@ export default function Home() {
     status === "preparing_session" ? sessionId : sessionId,
     userId,
     username
-  );  
+  );
 
   // auto-navigate once session is ready
   useEffect(() => {
@@ -55,35 +60,89 @@ export default function Home() {
     }
   }, [sessionState, navigate, sessionId]);
 
+  useEffect(() => {
+    const fetchOngoing = async () => {
+      // 1) try backend first
+      try {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+          // not logged in
+          setRejoinSession(null);
+          setHasOngoingMeeting(false);
+        } else {
+          const res = await fetch("/api/v1/matching/sessions/active", {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          console.log("rejoin: status", res.status);
+
+          if (res.status === 200) {
+            const data = await res.json();
+            setRejoinSession(data);
+            setHasOngoingMeeting(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load ongoing session from backend", err);
+      }
+
+      // 2) fallback: check localStorage
+      const localSessionId = localStorage.getItem("active_session_id");
+      if (localSessionId) {
+        setRejoinSession({ session_id: localSessionId });
+        setHasOngoingMeeting(true);
+      } else {
+        setRejoinSession(null);
+        setHasOngoingMeeting(false);
+      }
+    };
+
+    if (userId) {
+      fetchOngoing();
+    }
+  }, [userId, setHasOngoingMeeting]);
+
+  const handleRejoin = () => {
+    if (!rejoinSession) return;
+    navigate(`/session/active/${rejoinSession.session_id}`);
+  };
+
   return (
     <div className="min-h-screen bg-[#D7D6E6]">
       <TopNav />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="flex gap-6">
-          {hasOngoingMeeting && <OngoingMeetingCard onRejoin={() => alert("Rejoining meeting...")} />}
+          {hasOngoingMeeting && (
+            <OngoingMeetingCard onRejoin={handleRejoin} />
+          )}
 
           <section className="flex-1 rounded-2xl bg-white p-8 shadow border border-gray-200">
             {status === "idle" && (
-              <QuestionSelection 
+              <QuestionSelection
                 topic={topic}
                 setTopic={setTopic}
                 difficulty={difficulty}
                 setDifficulty={setDifficulty}
                 topics={topics}
                 completedTopics={completedTopics}
-                disableStart={disableStart}
+                disableStart={disableStart|| hasOngoingMeeting}
                 startSearch={startSearch} 
+                topicDifficultyMatrix={topicDifficultyMatrix} 
               />
             )}
 
             {/* spinner */}
             {status === "searching" && (
-              <FindingMatch cancelSearch={cancelSearch}/>
+              <FindingMatch cancelSearch={cancelSearch} />
             )}
 
             {/* Match is found */}
             {status === "found" && (
-              <ConfirmMatch confirmMatch={confirmMatch} cancelSearch={cancelSearch} />
+              <ConfirmMatch confirmMatch={confirmMatch} cancelSearch={cancelSearch} setStatus={setStatus} />
             )}
 
             {/* No match found */}
@@ -97,6 +156,11 @@ export default function Home() {
             )}
 
             {/* Preparing session */}
+            {status === "confirm_timeout" && (
+              <ConfirmTimeout retry={retry} />
+            )}
+
+            {/* Preparing session */}
             {status === "preparing_session" && (
               <PreparingSession
                 sessionId={sessionId}
@@ -106,19 +170,6 @@ export default function Home() {
               />
             )}
           </section>
-        </div>
-
-
-        {/* TODO: remove this once logic for whether or not there is an ongoing meeting is up */}
-        <div className="mt-6 text-sm text-gray-600">
-          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={hasOngoingMeeting}
-              onChange={(e) => setHasOngoingMeeting(e.target.checked)}
-            />
-            Show “ongoing meeting” sidebar
-          </label>
         </div>
       </main>
     </div>

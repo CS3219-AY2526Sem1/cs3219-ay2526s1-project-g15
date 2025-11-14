@@ -29,7 +29,7 @@ export default function Landing() {
           </Button>
         </div>
 
-        <div className="my-3 flex items-center justify-center gap-6 mb-6">
+        {/* <div className="my-3 flex items-center justify-center gap-6 mb-6">
             <img
                 src={GoogleLogo}
                 alt="PeerPrep logo"
@@ -40,7 +40,7 @@ export default function Landing() {
                 alt="PeerPrep logo"
                 className="h-20 w-20 object-contain select-none pointer-events-none"
             />
-        </div>
+        </div> */}
       </div>
     </main>
   );

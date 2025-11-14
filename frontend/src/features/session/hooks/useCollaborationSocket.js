@@ -6,91 +6,179 @@ export default function useCollaborationSocket(sessionId, userId, username) {
     status: "preparing",
     code: "",
     notes: "",
-    users: []
+    users: [],          
+    chatMessages: [],   
   });
+  const [partnerLeft, setPartnerLeft] = useState(false);
   const socketRef = useRef(null);
 
+  const usersByIdRef = useRef(new Map());
+
+  const upsertUser = (id, name) => {
+    if (!id) return;
+    const existing = usersByIdRef.current.get(id);
+    usersByIdRef.current.set(id, name || existing || "Someone");
+  };
+
+  const nameOf = (id, fallback) => {
+    return usersByIdRef.current.get(id) || fallback || "Someone";
+  };
+
+  const normalizeUsers = (arr) =>
+    (arr || [])
+      .filter(Boolean)
+      .map((u) => ({
+        user_id: u.user_id,
+        username: u.username || nameOf(u.user_id, "Someone"),
+      }));
+
+  // Diff previous -> next users to generate joined/left system messages
+  const withPresenceDiff = (prevState, nextUsers) => {
+    const prevUsers = prevState.users || [];
+    const prevMap = new Map(prevUsers.map((u) => [u.user_id, u.username]));
+    const nextMap = new Map(nextUsers.map((u) => [u.user_id, u.username]));
+
+    const prevIds = new Set(prevMap.keys());
+    const nextIds = new Set(nextMap.keys());
+
+    const joinedIds = [...nextIds].filter((id) => !prevIds.has(id));
+    const leftIds   = [...prevIds].filter((id) => !nextIds.has(id));
+
+    // Seed ref-map with names before composing messages
+    nextUsers.forEach((u) => upsertUser(u.user_id, u.username));
+    // keep previous names in ref-map so we can know who leaves
+    prevUsers.forEach((u) => upsertUser(u.user_id, u.username));
+
+    const systemLines = [];
+
+    // Announce the other user that joined
+    joinedIds.forEach((id) => {
+      if (id === userId) return; // don't announce own presence
+      const nm = nameOf(id, nextMap.get(id) || "Someone");
+      systemLines.push({ type: "system", username: "system", text: `${nm} joined the session`, timestamp: new Date().toISOString() });
+    });
+
+    // Announce leaves
+    leftIds.forEach((id) => {
+      if (id === userId) return; // ignore our own disconnects
+      const nm = nameOf(id, prevMap.get(id) || "Someone");
+      systemLines.push({ type: "system", username: "system", text: `${nm} left the session`, timestamp: new Date().toISOString() });
+    });
+
+    return {
+      ...prevState,
+      users: nextUsers,
+      chatMessages: systemLines.length
+        ? [...(prevState.chatMessages || []), ...systemLines]
+        : prevState.chatMessages,
+    };
+  };
+
   useEffect(() => {
-    console.log("useCollaborationSocket effect running", sessionId, userId, username);
     if (!sessionId || !userId) return;
 
-    const wsUrl = `ws://localhost:8004/api/v1/ws/session/active/${sessionId}?user_id=${userId}&username=${username}`;
+    const wsUrl = `/api/v1/ws/session/active/${encodeURIComponent(
+      sessionId
+    )}?user_id=${encodeURIComponent(userId)}&username=${encodeURIComponent(username || "")}`;
+
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
     socket.onopen = () => {
-      console.log("Connected to WebSocket");
       setSocketReady(true);
-    }
+      safeSend({ type: "introduce", user_id: userId, username });
+    };
 
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      const msg = JSON.parse(event.data);
 
-      switch (message.type) {
-        case "session_state":
-            setSessionState(prev => ({
-              ...prev,
-              status: message.data ? "ready" : "preparing"
-            }));
-            break;
-        case "code_update":
-            setSessionState(prev => ({
-            ...prev,
-            code: message.code,
-            users: prev.users.map(u =>
-                u.user_id === message.user_id
-                ? { ...u, cursor: message.cursor }
-                : u
-            )
-            }));
-            break;
-        case "notes_update":
-            setSessionState(prev => ({
-            ...prev,
-            notes: message.notes
-            }));
-            break;
-        case "language_change":
-            // TO DO: handle language change if needed
-            break;
-        case "user_joined":
-            setSessionState(prev => ({
-            ...prev,
-            users: [...prev.users, { user_id: message.user_id, username: message.username, cursor: null }]
-            }));
-            break;
-        case "user_left":
-            setSessionState(prev => ({
-            ...prev,
-            users: prev.users.filter(u => u.user_id !== message.user_id)
-            }));
-            break;
-        default:
-            console.warn("Unhandled message:", message);
+      switch (msg.type) {
+        case "session_state": {
+          const incomingUsers = normalizeUsers(msg.data?.users || []);
+          setSessionState((prev) => withPresenceDiff(
+            { ...prev, status: msg.data ? "ready" : "preparing", code: msg.data?.code || "", chatMessages: msg.data?.chat || prev.chatMessages },
+            incomingUsers
+          ));
+          break;
         }
 
-    };
+        case "presence_snapshot": {
+          const incomingUsers = normalizeUsers(msg.users || []);
+          setSessionState((prev) => withPresenceDiff(prev, incomingUsers));
+          break;
+        }
+        case "introduce": {
+          const { user_id, username: u } = msg;
+          upsertUser(user_id, u);
+          setSessionState((prev) => {
+            const current = normalizeUsers(prev.users);
+            const has = current.some((x) => x.user_id === user_id);
+            const next = has
+              ? current.map((x) => (x.user_id === user_id ? { ...x, username: nameOf(user_id, u) } : x))
+              : [...current, { user_id, username: nameOf(user_id, u) }];
+            return withPresenceDiff(prev, next);
+          });
+          break;
+        }
 
-    socket.onclose = () => {
-      console.log("WebSocket closed");
-      setSocketReady(false);
-    };
+        case "user_joined": {
+          const { user_id, username: u } = msg;
+          upsertUser(user_id, u);
+          setSessionState((prev) => {
+            const current = normalizeUsers(prev.users);
+            const withoutDup = current.filter((x) => x.user_id !== user_id);
+            const next = [...withoutDup, { user_id, username: nameOf(user_id, u) }];
+            return withPresenceDiff(prev, next);
+          });
+          break;
+        }
 
-    socket.onerror = (err) => {
-      console.error("WebSocket error", err);
-    };
+        case "user_left":
+        case "partner_left": {
+          const { user_id, username: u } = msg;
+          // Keep the last known name before removal
+          upsertUser(user_id, u);
+          if (msg.type === "partner_left") setPartnerLeft(true);
 
-    return () => {
-      socket.close();
+          setSessionState((prev) => {
+            const current = normalizeUsers(prev.users);
+            const next = current.filter((x) => x.user_id !== user_id);
+            return withPresenceDiff(prev, next);
+          });
+          break;
+        }
+
+        case "chat_message": {
+          // Normalize username from user_id if missing
+          const resolvedName = msg.username || nameOf(msg.user_id, "Someone");
+          setSessionState((prev) => ({
+            ...prev,
+            chatMessages: [...(prev.chatMessages || []), { ...msg, username: resolvedName }],
+          }));
+          break;
+        }
+
+        case "code_update": {
+          setSessionState((prev) => ({ ...prev, code: msg.code }));
+          break;
+        }
+        default:
+          console.warn("Unhandled message type:", msg.type);
+      }
     };
+    socket.onclose = () => setSocketReady(false);
+    socket.onerror = (err) => console.error("WebSocket error", err);
+
+    return () => socket.close();
   }, [sessionId, userId, username]);
 
-  // Helper to send JSON messages
-  const sendMessage = (type, data = {}) => {
+  const safeSend = (obj) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type, ...data }));
+      socketRef.current.send(JSON.stringify(obj));
     }
   };
 
-  return { socketReady, sessionState, sendMessage };
+  const sendMessage = (type, data = {}) => safeSend({ type, ...data });
+
+  return { socketReady, sessionState, sendMessage, partnerLeft };
 }

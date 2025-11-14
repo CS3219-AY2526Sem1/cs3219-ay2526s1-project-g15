@@ -31,4 +31,12 @@ class User(Base):
         cascade="all,delete-orphan",
     )
 
+    attempts: Mapped[list["Attempt"]] = relationship(
+        "Attempt", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    question_statuses: Mapped[list["UserQuestionStatus"]] = relationship(
+        "UserQuestionStatus", back_populates="user", cascade="all, delete-orphan"
+    )
+
     from app.models.password_reset import PasswordReset

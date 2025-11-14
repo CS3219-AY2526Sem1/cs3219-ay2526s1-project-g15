@@ -11,11 +11,11 @@ class Settings(BaseSettings):
 
     # Database settings
     DATABASE_URL: Optional[str] = None
-    
+
     # JWT settings
     JWT_SECRET_KEY: str = "your-secret"
     JWT_ALGORITHM: str = "HS256"
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False

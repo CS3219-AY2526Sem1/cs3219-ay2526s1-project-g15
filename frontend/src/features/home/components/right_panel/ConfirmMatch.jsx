@@ -1,4 +1,13 @@
-export default function ConfirmMatch({ confirmMatch, cancelSearch }) {
+import { useEffect } from "react";
+
+export default function ConfirmMatch({ confirmMatch, cancelSearch, setStatus }) {
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setStatus('confirm_timeout')
+        }, 120000); // 2 minutes
+
+        return () => clearTimeout(timer);
+    }, []);
     return (
         <div className="h-[420px] w-full flex flex-col items-center justify-center gap-3">
             {/* Checkmark icon */}

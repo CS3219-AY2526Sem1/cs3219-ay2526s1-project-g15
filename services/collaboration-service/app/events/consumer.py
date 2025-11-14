@@ -15,8 +15,10 @@ async def notify_session_ready(session_id):
         session_id,
         {
             "type": "session_state",
-            "status": "ready",
-            "session_id": session_id
+            "data": {
+                "status": "ready",
+                "session_id": session_id
+            }
         },
         exclude_user_id=None
     )
@@ -41,6 +43,7 @@ async def handle_session_created(payload):
         "partner": partner_id,
         "language": "python",
         "code": "",
+        "chat": []
     }
 
     await redis_client.set(session_id, json.dumps(session_data))
