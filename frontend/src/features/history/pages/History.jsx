@@ -120,7 +120,7 @@ export default function History() {
                 <div className="flex items-center gap-2 text-sm text-gray-700">
                   <CheckIcon className="h-6 w-6 text-[#4C8954]" />
                   <span>
-                    {solvedCount}/{totalPool} attempts solved
+                    {solvedCount} attempts completed.
                   </span>
                 </div>
               </div>
